@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import {
-  Row, Col, Card, Input, Button, Space, message, Tag,
+  Row, Col, Card, Input, Button, Space, message, Tag, Select, DatePicker,
 } from 'antd'
 import {
   SendOutlined, CopyOutlined, ThunderboltOutlined, MailOutlined,
 } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
+import dayjs from 'dayjs'
 import { streamOfferEmail } from '../services/api'
 
 const { TextArea } = Input
@@ -28,7 +29,7 @@ export default function OfferEmailPage() {
   const [loading, setLoading] = useState(false)
   const [emailContent, setEmailContent] = useState('')
 
-  const formFilled = candidateName.trim() && position.trim() && salary.trim()
+  const formFilled = candidateName.trim() && position.trim() && salary.trim() && startDate.trim() && location.trim() && companyName.trim()
 
   const handleGenerate = async () => {
     if (!formFilled || loading) return
@@ -115,10 +116,21 @@ export default function OfferEmailPage() {
 
               <div>
                 <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>录用岗位 *</div>
-                <Input
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  placeholder="如：高级Java开发工程师"
+                <Select
+                  value={position || undefined}
+                  onChange={setPosition}
+                  placeholder="请选择录用岗位"
+                  options={[
+                    { label: '高级Java开发工程师', value: '高级Java开发工程师' },
+                    { label: '产品经理（B端）', value: '产品经理（B端）' },
+                    { label: '前端开发工程师', value: '前端开发工程师' },
+                    { label: '高级数据分析师', value: '高级数据分析师' },
+                    { label: '算法工程师', value: '算法工程师' },
+                    { label: 'UI/UX设计师', value: 'UI/UX设计师' },
+                    { label: '测试开发工程师', value: '测试开发工程师' },
+                    { label: '运维工程师', value: '运维工程师' },
+                  ]}
+                  style={{ width: '100%' }}
                 />
               </div>
 
@@ -132,16 +144,18 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>报到日期</div>
-                <Input
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  placeholder="如：2026年7月1日"
+                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>报到日期 *</div>
+                <DatePicker
+                  value={startDate ? dayjs(startDate) : null}
+                  onChange={(date) => setStartDate(date ? date.format('YYYY年M月D日') : '')}
+                  style={{ width: '100%' }}
+                  placeholder="选择报到日期"
+                  disabledDate={(current) => current && current.isBefore(dayjs(), 'day')}
                 />
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>工作地点</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>工作地点 *</div>
                 <Input
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
@@ -150,7 +164,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>公司名称</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>公司名称 *</div>
                 <Input
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}

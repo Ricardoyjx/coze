@@ -37,8 +37,9 @@ export async function streamJDGeneration(
       const text = decoder.decode(value, { stream: true })
 
       // Backend may send full accumulated text (Coze SSE events) or
-      // incremental deltas (mock chars). Compute delta to avoid doubling.
-      if (text.length > fullText.length) {
+      // incremental deltas (mock chars). Detect by checking if new text
+      // starts with previous content (accumulated) or not (delta).
+      if (text.startsWith(fullText) && text.length > fullText.length) {
         // Accumulated format: text contains the full response so far
         const delta = text.slice(fullText.length)
         if (delta) onChunk(delta)
@@ -170,7 +171,7 @@ export async function streamOfferEmail(
 
       const text = decoder.decode(value, { stream: true })
 
-      if (text.length > fullText.length) {
+      if (text.startsWith(fullText) && text.length > fullText.length) {
         const delta = text.slice(fullText.length)
         if (delta) onChunk(delta)
         fullText = text
@@ -319,18 +320,36 @@ export async function streamScreeningRun(
 
 // ====== Coze 配置相关 API ======
 
+export interface CozeSpace {
+  space_id: string
+  name: string
+  api_key_configured: boolean
+  bot_id: string
+  bots: { bot_id: string; name: string; description: string; status: string }[]
+  error?: string
+}
+
 export interface CozeStatus {
-  token_configured: boolean
+  spaces_configured: number
+  spaces: CozeSpace[]
   workflows: {
     [key: string]: { id: string; configured: boolean }
   }
-  bots: { bot_id: string; name: string; description: string; status: string }[]
-  workspaces: { id: string; name: string }[]
   error: string | null
 }
 
 export async function fetchCozeStatus(): Promise<CozeStatus> {
   const res = await fetch('/api/coze/status')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function selectCozeBot(spaceId: string, botId: string) {
+  const res = await fetch('/api/coze/bot/select', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ space_id: spaceId, bot_id: botId }),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }

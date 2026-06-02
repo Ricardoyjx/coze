@@ -58,23 +58,76 @@ uploaded_resumes: dict[str, ResumeData] = {}
 screening_tasks: dict[str, dict] = {}
 jd_history: list[dict] = []
 
-# ===================== Coze 工作流集成 =====================
+# ===================== Coze 工作流集成（多Space支持） =====================
 
+import json as _json
+
+
+def _load_spaces_config() -> dict:
+    """解析 COZE_SPACES_CONFIG 环境变量，返回 {space_id: {name, api_key, bot_id}}"""
+    raw = os.getenv("COZE_SPACES_CONFIG", "").strip()
+    if not raw:
+        # 兼容旧配置：用单一 token 回退
+        token = os.getenv("COZE_API_TOKEN", "")
+        if token:
+            return {"default": {"name": "默认空间", "api_key": token, "bot_id": ""}}
+        return {}
+    try:
+        return _json.loads(raw)
+    except _json.JSONDecodeError:
+        return {}
+
+
+COZE_SPACES = _load_spaces_config()
 COZE_API_TOKEN = os.getenv("COZE_API_TOKEN", "")
 JD_WORKFLOW_ID = os.getenv("COZE_JD_WORKFLOW_ID", "")
 SCREEN_WORKFLOW_ID = os.getenv("COZE_SCREEN_WORKFLOW_ID", "")
 
 
-def get_coze_client():
-    """获取Coze客户端（延迟初始化）"""
-    if not COZE_API_TOKEN:
+_coze_clients: dict = {}
+
+
+def get_coze_client(space_id: str = ""):
+    """获取指定空间的 Coze 客户端（延迟初始化），不传则取第一个可用空间"""
+    # 确定目标空间
+    if space_id and space_id in COZE_SPACES:
+        cfg = COZE_SPACES[space_id]
+    elif COZE_SPACES:
+        space_id = next(iter(COZE_SPACES))
+        cfg = COZE_SPACES[space_id]
+    else:
+        # 旧模式兼容
+        if not COZE_API_TOKEN:
+            return None
+        cfg = {"api_key": COZE_API_TOKEN}
+
+    api_key = cfg.get("api_key", "")
+    if not api_key:
         return None
+
+    # 命中缓存
+    if space_id in _coze_clients:
+        return _coze_clients[space_id]
+
     try:
         from cozepy import Coze, TokenAuth, COZE_CN_BASE_URL
 
-        return Coze(auth=TokenAuth(token=COZE_API_TOKEN), base_url=COZE_CN_BASE_URL)
+        client = Coze(auth=TokenAuth(token=api_key), base_url=COZE_CN_BASE_URL)
+        _coze_clients[space_id] = client
+        return client
     except ImportError:
         return None
+
+
+def get_all_coze_clients() -> dict:
+    """返回 {space_id: client}，遍历所有已配置且有 api_key 的空间"""
+    clients = {}
+    for sid, cfg in COZE_SPACES.items():
+        if cfg.get("api_key"):
+            c = get_coze_client(sid)
+            if c:
+                clients[sid] = c
+    return clients
 
 
 async def call_coze_jd_workflow_stream(message: str):
@@ -378,9 +431,17 @@ async def analyze_salary(req: SalaryAnalysisRequest):
 
     # 根据岗位关键词调整数据
     pos_lower = position.lower()
-    if any(kw in pos_lower for kw in ["java", "后端", "go", "python", "c++", "c#", "rust"]):
+    if any(
+        kw in pos_lower for kw in ["java", "后端", "go", "python", "c++", "c#", "rust"]
+    ):
         mock_data["salaryRange"] = {"min": 18, "max": 50, "median": 28}
-        mock_data["percentiles"] = {"p10": 15, "p25": 20, "p50": 28, "p75": 35, "p90": 45}
+        mock_data["percentiles"] = {
+            "p10": 15,
+            "p25": 20,
+            "p50": 28,
+            "p75": 35,
+            "p90": 45,
+        }
         mock_data["experienceLevels"] = [
             {"level": "1年以下", "salary": 12},
             {"level": "1-3年", "salary": 18},
@@ -392,12 +453,24 @@ async def analyze_salary(req: SalaryAnalysisRequest):
         mock_data["recommendedRange"] = "25K - 38K"
     elif any(kw in pos_lower for kw in ["前端", "web", "react", "vue", "angular"]):
         mock_data["salaryRange"] = {"min": 15, "max": 42, "median": 24}
-        mock_data["percentiles"] = {"p10": 12, "p25": 18, "p50": 24, "p75": 32, "p90": 38}
+        mock_data["percentiles"] = {
+            "p10": 12,
+            "p25": 18,
+            "p50": 24,
+            "p75": 32,
+            "p90": 38,
+        }
         mock_data["industryAvg"] = 24
         mock_data["recommendedRange"] = "20K - 32K"
     elif any(kw in pos_lower for kw in ["产品", "产品经理"]):
         mock_data["salaryRange"] = {"min": 15, "max": 45, "median": 25}
-        mock_data["percentiles"] = {"p10": 12, "p25": 18, "p50": 25, "p75": 33, "p90": 40}
+        mock_data["percentiles"] = {
+            "p10": 12,
+            "p25": 18,
+            "p50": 25,
+            "p75": 33,
+            "p90": 40,
+        }
         mock_data["experienceLevels"] = [
             {"level": "1年以下", "salary": 10},
             {"level": "1-3年", "salary": 16},
@@ -407,9 +480,18 @@ async def analyze_salary(req: SalaryAnalysisRequest):
         ]
         mock_data["industryAvg"] = 25
         mock_data["recommendedRange"] = "22K - 35K"
-    elif any(kw in pos_lower for kw in ["数据分析", "数据", "算法", "ai", "人工智能", "机器学习"]):
+    elif any(
+        kw in pos_lower
+        for kw in ["数据分析", "数据", "算法", "ai", "人工智能", "机器学习"]
+    ):
         mock_data["salaryRange"] = {"min": 20, "max": 55, "median": 30}
-        mock_data["percentiles"] = {"p10": 16, "p25": 22, "p50": 30, "p75": 40, "p90": 50}
+        mock_data["percentiles"] = {
+            "p10": 16,
+            "p25": 22,
+            "p50": 30,
+            "p75": 40,
+            "p90": 50,
+        }
         mock_data["experienceLevels"] = [
             {"level": "1年以下", "salary": 14},
             {"level": "1-3年", "salary": 20},
@@ -422,9 +504,18 @@ async def analyze_salary(req: SalaryAnalysisRequest):
 
     # 按城市调整
     city_map = {
-        "北京": 1.15, "上海": 1.12, "深圳": 1.12, "广州": 1.05,
-        "杭州": 1.08, "成都": 0.92, "南京": 0.95, "武汉": 0.90,
-        "西安": 0.88, "长沙": 0.85, "重庆": 0.85, "苏州": 0.95,
+        "北京": 1.15,
+        "上海": 1.12,
+        "深圳": 1.12,
+        "广州": 1.05,
+        "杭州": 1.08,
+        "成都": 0.92,
+        "南京": 0.95,
+        "武汉": 0.90,
+        "西安": 0.88,
+        "长沙": 0.85,
+        "重庆": 0.85,
+        "苏州": 0.95,
     }
     ratio = city_map.get(city, 1.0)
     if ratio != 1.0:
@@ -437,7 +528,9 @@ async def analyze_salary(req: SalaryAnalysisRequest):
             for item in mock_data[arr_key]:
                 item["salary"] = round(item["salary"] * ratio)
         low, high = mock_data["recommendedRange"].replace("K", "").split(" - ")
-        mock_data["recommendedRange"] = f"{round(int(low) * ratio)}K - {round(int(high) * ratio)}K"
+        mock_data["recommendedRange"] = (
+            f"{round(int(low) * ratio)}K - {round(int(high) * ratio)}K"
+        )
 
     return mock_data
 
@@ -480,18 +573,20 @@ async def batch_screen(req: BatchScreenRequest):
     results = []
     for i, (name, tech, skills_str, score, rec) in enumerate(selected, 1):
         passed = score >= req.threshold
-        results.append({
-            "id": f"batch_{i}",
-            "name": name,
-            "filename": f"{name}_简历.pdf",
-            "mainTech": tech,
-            "skills": skills_str,
-            "score": score,
-            "recommendation": rec,
-            "passed": passed,
-            "education": "本科",
-            "workYears": 3 + (i % 5),
-        })
+        results.append(
+            {
+                "id": f"batch_{i}",
+                "name": name,
+                "filename": f"{name}_简历.pdf",
+                "mainTech": tech,
+                "skills": skills_str,
+                "score": score,
+                "recommendation": rec,
+                "passed": passed,
+                "education": "本科",
+                "workYears": 3 + (i % 5),
+            }
+        )
 
     passed_count = sum(1 for r in results if r["passed"])
     return {
@@ -514,46 +609,126 @@ async def run_screening(req: ScreeningRequest):
     total = len(req.resumeIds)
 
     candidate_pool = [
-        ("张三", "Java", ["Java", "Spring Boot", "微服务", "MySQL", "Redis", "Docker"], 6, "本科·北京大学", 92, "strong",
-         ["6年Java开发经验", "精通Spring Boot微服务", "熟悉Docker容器化部署"],
-         ["缺少大数据处理经验"],
-         "候选人技术栈与岗位高度匹配，微服务经验丰富，强烈推荐面试。"),
-        ("李四", "Java", ["Java", "Spring Cloud", "MySQL", "Kafka"], 4, "硕士·清华大学", 78, "moderate",
-         ["硕士学历背景优秀", "熟悉Spring Cloud体系"],
-         ["工作年限略短", "缺少Docker/K8s经验"],
-         "候选人学历优秀，技术基础扎实，但微服务部署经验偏弱，建议考虑。"),
-        ("王五", "Python", ["Python", "Django", "PostgreSQL"], 3, "本科·武汉大学", 35, "weak",
-         ["有后端开发经验"],
-         ["主要技术栈为Python非Java", "无微服务经验", "工作年限不足"],
-         "候选人技术栈与岗位需求不匹配，主要使用Python而非Java，不推荐。"),
-        ("赵六", "Java", ["Java", "Spring", "MyBatis", "RabbitMQ"], 5, "本科·华中科技", 72, "moderate",
-         ["5年Java开发经验", "熟悉消息队列"],
-         ["缺少微服务实战经验", "云原生经验不足"],
-         "候选人Java基础扎实，但微服务和云原生经验偏弱，建议进一步沟通。"),
-        ("钱七", "Go", ["Go", "Gin", "gRPC", "K8s", "Docker"], 7, "本科·浙江大学", 88, "strong",
-         ["7年后端开发经验", "精通K8s和Docker", "微服务架构经验丰富"],
-         ["主要技术栈为Go而非Java"],
-         "候选人虽主用Go，但架构能力和云原生经验突出，值得考虑跨技术栈培养。"),
-        ("孙八", "Java", ["Java", "Spring Boot", "MongoDB", "ES"], 3, "硕士·南京大学", 65, "moderate",
-         ["硕士学历", "熟悉Spring Boot"],
-         ["工作年限较短", "缺少微服务架构经验"],
-         "候选人基础和学历不错，但经验尚浅，建议作为后备人选。"),
-        ("周九", "C++", ["C++", "Qt", "STL", "Linux"], 8, "本科·哈工大", 45, "weak",
-         ["8年C++开发经验", "Linux系统编程经验丰富"],
-         ["主要技术栈为C++而非Java", "无微服务经验", "无Java生态经验"],
-         "候选人技术栈与Java岗位严重不匹配，不推荐。"),
-        ("吴十", "Java", ["Java", "Spring Cloud", "Nacos", "Sentinel", "MySQL"], 6, "本科·西安交大", 82, "strong",
-         ["6年Java开发经验", "精通Spring Cloud体系", "有高并发经验"],
-         ["学历背景一般"],
-         "候选人Java技术栈扎实，微服务和高并发经验匹配度高，推荐面试。"),
-        ("郑十一", "前端", ["React", "TypeScript", "Webpack", "Node.js"], 4, "本科·电子科大", 50, "weak",
-         ["4年前端开发经验", "熟悉React生态"],
-         ["技术栈为前端而非Java/后端", "缺少后端服务开发经验"],
-         "候选人偏前端方向，与后端岗位JD不匹配，不推荐。"),
-        ("冯十二", "Java", ["Java", "Spring", "Dubbo", "Zookeeper", "MyBatis"], 9, "本科·北京邮电", 90, "strong",
-         ["9年Java开发经验", "精通Dubbo和分布式架构", "大厂背景"],
-         ["对新兴技术栈了解较少"],
-         "候选人Java经验深厚，分布式架构能力强，强烈推荐。"),
+        (
+            "张三",
+            "Java",
+            ["Java", "Spring Boot", "微服务", "MySQL", "Redis", "Docker"],
+            6,
+            "本科·北京大学",
+            92,
+            "strong",
+            ["6年Java开发经验", "精通Spring Boot微服务", "熟悉Docker容器化部署"],
+            ["缺少大数据处理经验"],
+            "候选人技术栈与岗位高度匹配，微服务经验丰富，强烈推荐面试。",
+        ),
+        (
+            "李四",
+            "Java",
+            ["Java", "Spring Cloud", "MySQL", "Kafka"],
+            4,
+            "硕士·清华大学",
+            78,
+            "moderate",
+            ["硕士学历背景优秀", "熟悉Spring Cloud体系"],
+            ["工作年限略短", "缺少Docker/K8s经验"],
+            "候选人学历优秀，技术基础扎实，但微服务部署经验偏弱，建议考虑。",
+        ),
+        (
+            "王五",
+            "Python",
+            ["Python", "Django", "PostgreSQL"],
+            3,
+            "本科·武汉大学",
+            35,
+            "weak",
+            ["有后端开发经验"],
+            ["主要技术栈为Python非Java", "无微服务经验", "工作年限不足"],
+            "候选人技术栈与岗位需求不匹配，主要使用Python而非Java，不推荐。",
+        ),
+        (
+            "赵六",
+            "Java",
+            ["Java", "Spring", "MyBatis", "RabbitMQ"],
+            5,
+            "本科·华中科技",
+            72,
+            "moderate",
+            ["5年Java开发经验", "熟悉消息队列"],
+            ["缺少微服务实战经验", "云原生经验不足"],
+            "候选人Java基础扎实，但微服务和云原生经验偏弱，建议进一步沟通。",
+        ),
+        (
+            "钱七",
+            "Go",
+            ["Go", "Gin", "gRPC", "K8s", "Docker"],
+            7,
+            "本科·浙江大学",
+            88,
+            "strong",
+            ["7年后端开发经验", "精通K8s和Docker", "微服务架构经验丰富"],
+            ["主要技术栈为Go而非Java"],
+            "候选人虽主用Go，但架构能力和云原生经验突出，值得考虑跨技术栈培养。",
+        ),
+        (
+            "孙八",
+            "Java",
+            ["Java", "Spring Boot", "MongoDB", "ES"],
+            3,
+            "硕士·南京大学",
+            65,
+            "moderate",
+            ["硕士学历", "熟悉Spring Boot"],
+            ["工作年限较短", "缺少微服务架构经验"],
+            "候选人基础和学历不错，但经验尚浅，建议作为后备人选。",
+        ),
+        (
+            "周九",
+            "C++",
+            ["C++", "Qt", "STL", "Linux"],
+            8,
+            "本科·哈工大",
+            45,
+            "weak",
+            ["8年C++开发经验", "Linux系统编程经验丰富"],
+            ["主要技术栈为C++而非Java", "无微服务经验", "无Java生态经验"],
+            "候选人技术栈与Java岗位严重不匹配，不推荐。",
+        ),
+        (
+            "吴十",
+            "Java",
+            ["Java", "Spring Cloud", "Nacos", "Sentinel", "MySQL"],
+            6,
+            "本科·西安交大",
+            82,
+            "strong",
+            ["6年Java开发经验", "精通Spring Cloud体系", "有高并发经验"],
+            ["学历背景一般"],
+            "候选人Java技术栈扎实，微服务和高并发经验匹配度高，推荐面试。",
+        ),
+        (
+            "郑十一",
+            "前端",
+            ["React", "TypeScript", "Webpack", "Node.js"],
+            4,
+            "本科·电子科大",
+            50,
+            "weak",
+            ["4年前端开发经验", "熟悉React生态"],
+            ["技术栈为前端而非Java/后端", "缺少后端服务开发经验"],
+            "候选人偏前端方向，与后端岗位JD不匹配，不推荐。",
+        ),
+        (
+            "冯十二",
+            "Java",
+            ["Java", "Spring", "Dubbo", "Zookeeper", "MyBatis"],
+            9,
+            "本科·北京邮电",
+            90,
+            "strong",
+            ["9年Java开发经验", "精通Dubbo和分布式架构", "大厂背景"],
+            ["对新兴技术栈了解较少"],
+            "候选人Java经验深厚，分布式架构能力强，强烈推荐。",
+        ),
     ]
 
     async def event_generator():
@@ -561,7 +736,18 @@ async def run_screening(req: ScreeningRequest):
         for i in range(total):
             await asyncio.sleep(0.8)
             idx = i % len(candidate_pool)
-            name, tech, skills, work_years, edu, score, rec, matches, misses, summary = candidate_pool[idx]
+            (
+                name,
+                tech,
+                skills,
+                work_years,
+                edu,
+                score,
+                rec,
+                matches,
+                misses,
+                summary,
+            ) = candidate_pool[idx]
             resume_id = req.resumeIds[i] if i < len(req.resumeIds) else f"auto_{i}"
             result_item = {
                 "id": resume_id,
@@ -609,50 +795,77 @@ async def run_screening(req: ScreeningRequest):
 
 @app.get("/api/coze/status")
 async def coze_status():
-    """返回Coze配置状态和可用的Bot列表"""
-    result = {
-        "token_configured": bool(COZE_API_TOKEN),
-        "workflows": {
-            "jd_generate": {"id": JD_WORKFLOW_ID, "configured": bool(JD_WORKFLOW_ID)},
-            "screening": {"id": SCREEN_WORKFLOW_ID, "configured": bool(SCREEN_WORKFLOW_ID)},
-            "offer_email": {"id": os.getenv("COZE_OFFER_WORKFLOW_ID", ""), "configured": bool(os.getenv("COZE_OFFER_WORKFLOW_ID", ""))},
-        },
-        "bots": [],
-        "workspaces": [],
-        "error": None,
-    }
+    """返回Coze多Space配置状态和可用的Bot列表"""
+    spaces = []
+    errors = []
 
-    if not COZE_API_TOKEN:
-        result["error"] = "COZE_API_TOKEN 未配置"
-        return result
+    for space_id, cfg in COZE_SPACES.items():
+        space = {
+            "space_id": space_id,
+            "name": cfg.get("name", ""),
+            "api_key_configured": bool(cfg.get("api_key")),
+            "bot_id": cfg.get("bot_id", ""),
+            "bots": [],
+        }
 
-    try:
-        coze = get_coze_client()
-        if not coze:
-            result["error"] = "Coze 客户端初始化失败"
-            return result
+        client = get_coze_client(space_id)
+        if not client:
+            if not cfg.get("api_key"):
+                space["error"] = "API Key 未配置"
+            else:
+                space["error"] = "客户端初始化失败"
+            spaces.append(space)
+            continue
 
-        # 获取工作空间列表
-        workspaces = list(coze.workspaces.list())
-        for ws in workspaces:
-            ws_info = {"id": ws.id if hasattr(ws, "id") else "", "name": ws.name if hasattr(ws, "name") else ""}
-            result["workspaces"].append(ws_info)
-
-            # 获取每个工作空间下的 Bot
-            try:
-                bots = list(coze.bots.list(space_id=ws.id))
-                for bot in bots:
-                    bot_info = {
+        try:
+            bots = list(client.bots.list(space_id=space_id))
+            for bot in bots:
+                space["bots"].append(
+                    {
                         "bot_id": bot.bot_id if hasattr(bot, "bot_id") else "",
                         "name": bot.name if hasattr(bot, "name") else "",
-                        "description": bot.description if hasattr(bot, "description") else "",
+                        "description": (
+                            bot.description if hasattr(bot, "description") else ""
+                        ),
                         "status": bot.status if hasattr(bot, "status") else "",
                     }
-                    result["bots"].append(bot_info)
-            except Exception as e:
-                result["error"] = f"获取工作空间 {ws.id} 的 Bot 列表失败: {str(e)}"
+                )
+            # bot_id 未配置时自动取第一个 bot
+            if not space["bot_id"] and space["bots"]:
+                space["bot_id"] = space["bots"][0]["bot_id"]
+                COZE_SPACES[space_id]["bot_id"] = space["bot_id"]
+        except Exception as e:
+            space["error"] = f"获取Bot列表失败: {str(e)}"
+            errors.append(space["error"])
 
-    except Exception as e:
-        result["error"] = f"Coze API 调用失败: {str(e)}"
+        spaces.append(space)
 
-    return result
+    return {
+        "spaces_configured": len(COZE_SPACES),
+        "spaces": spaces,
+        "workflows": {
+            "jd_generate": {"id": JD_WORKFLOW_ID, "configured": bool(JD_WORKFLOW_ID)},
+            "screening": {
+                "id": SCREEN_WORKFLOW_ID,
+                "configured": bool(SCREEN_WORKFLOW_ID),
+            },
+            "offer_email": {
+                "id": os.getenv("COZE_OFFER_WORKFLOW_ID", ""),
+                "configured": bool(os.getenv("COZE_OFFER_WORKFLOW_ID", "")),
+            },
+        },
+        "error": errors[0] if errors else None,
+    }
+
+
+@app.post("/api/coze/bot/select")
+async def select_bot(body: dict):
+    """切换指定 Space 的默认 Bot"""
+    space_id = body.get("space_id", "")
+    bot_id = body.get("bot_id", "")
+    if not space_id or not bot_id:
+        return {"error": "space_id 和 bot_id 必填"}
+    if space_id not in COZE_SPACES:
+        return {"error": f"空间 {space_id} 不存在"}
+    COZE_SPACES[space_id]["bot_id"] = bot_id
+    return {"ok": True, "space_id": space_id, "bot_id": bot_id}

@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import {
-  Card, Row, Col, Tag, Space, Table, Spin, Alert, Descriptions, Button,
+  Card, Tag, Space, Table, Spin, Alert, Descriptions, Button, Collapse, message,
 } from 'antd'
 import {
-  ApiOutlined, CheckCircleFilled, CloseCircleFilled, ReloadOutlined,
+  ApiOutlined, CheckCircleFilled, CloseCircleFilled, ReloadOutlined, CheckOutlined,
 } from '@ant-design/icons'
-import { fetchCozeStatus } from '../services/api'
-import type { CozeStatus } from '../services/api'
+import { fetchCozeStatus, selectCozeBot } from '../services/api'
+import type { CozeStatus, CozeSpace } from '../services/api'
 
 export default function CozePage() {
   const [status, setStatus] = useState<CozeStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selecting, setSelecting] = useState<string | null>(null)
 
   const loadStatus = async () => {
     setLoading(true)
@@ -30,6 +31,19 @@ export default function CozePage() {
     loadStatus()
   }, [])
 
+  const handleSelectBot = async (spaceId: string, botId: string) => {
+    setSelecting(`${spaceId}:${botId}`)
+    try {
+      await selectCozeBot(spaceId, botId)
+      message.success('Bot 已切换')
+      await loadStatus()
+    } catch (err: any) {
+      message.error(err.message || '切换失败')
+    } finally {
+      setSelecting(null)
+    }
+  }
+
   const TagStatus = (ok: boolean, label?: string) => (
     <Tag
       icon={ok ? <CheckCircleFilled /> : <CloseCircleFilled />}
@@ -39,20 +53,25 @@ export default function CozePage() {
     </Tag>
   )
 
-  const workflowColumns = [
-    { title: '工作流', dataIndex: 'key', key: 'key' },
-    {
-      title: '状态', dataIndex: 'configured', key: 'configured',
-      render: (v: boolean) => TagStatus(v),
-    },
-    { title: 'Workflow ID', dataIndex: 'id', key: 'id', render: (v: string) => v ? '******' : '-' },
-  ]
-
-  const botColumns = [
+  const botColumns = (spaceId: string, currentBotId: string) => [
     { title: 'Bot ID', dataIndex: 'bot_id', key: 'bot_id' },
     { title: '名称', dataIndex: 'name', key: 'name' },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-    { title: '状态', dataIndex: 'status', key: 'status' },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: any, record: any) => (
+        <Button
+          type={record.bot_id === currentBotId ? 'primary' : 'default'}
+          size="small"
+          icon={record.bot_id === currentBotId ? <CheckOutlined /> : undefined}
+          loading={selecting === `${spaceId}:${record.bot_id}`}
+          onClick={() => handleSelectBot(spaceId, record.bot_id)}
+        >
+          {record.bot_id === currentBotId ? '当前' : '选择'}
+        </Button>
+      ),
+    },
   ]
 
   if (loading) {
@@ -68,7 +87,7 @@ export default function CozePage() {
     <div>
       <div className="page-header">
         <h2><ApiOutlined /> Coze 配置状态</h2>
-        <p>检测 Coze API 连接状态、工作流配置和可用 Bot 列表</p>
+        <p>多 Space / 多 Bot 配置管理</p>
       </div>
 
       {error && (
@@ -84,9 +103,8 @@ export default function CozePage() {
 
       {status && (
         <>
-          {/* API 连接状态 */}
           <Card
-            title="API 连接"
+            title="概览"
             extra={
               <Button size="small" icon={<ReloadOutlined />} onClick={loadStatus}>
                 刷新
@@ -95,38 +113,38 @@ export default function CozePage() {
             style={{ marginBottom: 16 }}
           >
             <Descriptions column={2} size="small">
-              <Descriptions.Item label="API Token">
-                {TagStatus(status.token_configured)}
+              <Descriptions.Item label="已配置 Space 数">
+                <Tag color="blue">{status.spaces_configured}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="API 地址">
-                api.coze.cn
-              </Descriptions.Item>
-              <Descriptions.Item label="工作空间" span={2}>
-                {status.workspaces.length > 0
-                  ? status.workspaces.map((ws) => (
-                      <Tag key={ws.id} color="blue">{ws.name} ({ws.id})</Tag>
-                    ))
-                  : <span style={{ color: '#999' }}>无</span>
-                }
+              <Descriptions.Item label="工作流配置数">
+                <Tag color="blue">
+                  {Object.values(status.workflows).filter((w) => w.configured).length}
+                </Tag>
               </Descriptions.Item>
             </Descriptions>
           </Card>
 
-          {/* 工作流配置 */}
           <Card title="工作流配置" style={{ marginBottom: 16 }}>
             <Table
               dataSource={Object.entries(status.workflows).map(([key, val]) => ({
-                key: key,
+                key,
                 label: ({
                   jd_generate: 'JD 生成',
                   screening: '简历初筛',
                   offer_email: 'Offer 邮件',
-                })[key] || key,
+                } as Record<string, string>)[key] || key,
                 ...val,
               }))}
               columns={[
                 { title: '功能', dataIndex: 'label', key: 'label' },
-                ...workflowColumns.slice(1),
+                {
+                  title: '状态', dataIndex: 'configured', key: 'configured',
+                  render: (v: boolean) => TagStatus(v),
+                },
+                {
+                  title: 'Workflow ID', dataIndex: 'id', key: 'id',
+                  render: (v: string) => v ? '******' : '-',
+                },
               ]}
               rowKey="key"
               pagination={false}
@@ -134,40 +152,78 @@ export default function CozePage() {
             />
           </Card>
 
-          {/* Bot 列表 */}
-          <Card
-            title={
-              <Space>
-                <span>Bot 列表</span>
-                <Tag>{status.bots.length}</Tag>
-              </Space>
-            }
-          >
-            {status.bots.length > 0 ? (
-              <Table
-                dataSource={status.bots}
-                columns={botColumns}
-                rowKey="bot_id"
-                pagination={false}
+          {status.spaces.map((space: CozeSpace) => (
+            <Card
+              key={space.space_id}
+              title={
+                <Space>
+                  <span>{space.name || space.space_id}</span>
+                  <Tag>{space.space_id}</Tag>
+                  {TagStatus(space.api_key_configured)}
+                </Space>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions column={2} size="small" style={{ marginBottom: 12 }}>
+                <Descriptions.Item label="API Key">
+                  {space.api_key_configured ? '******' : <span style={{ color: '#999' }}>未配置</span>}
+                </Descriptions.Item>
+                <Descriptions.Item label="当前 Bot">
+                  {space.bot_id
+                    ? <Tag color="blue">{space.bot_id}</Tag>
+                    : <span style={{ color: '#999' }}>未设置（下方选择）</span>
+                  }
+                </Descriptions.Item>
+              </Descriptions>
+
+              {space.error && (
+                <Alert
+                  message={space.error}
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  closable
+                />
+              )}
+
+              <Collapse
                 size="small"
+                defaultActiveKey={space.bot_id ? [] : ['bots']}
+                items={[{
+                  key: 'bots',
+                  label: (
+                    <Space>
+                      <span>Bot 列表</span>
+                      <Tag>{space.bots.length}</Tag>
+                    </Space>
+                  ),
+                  children: space.bots.length > 0 ? (
+                    <Table
+                      dataSource={space.bots}
+                      columns={botColumns(space.space_id, space.bot_id)}
+                      rowKey="bot_id"
+                      pagination={false}
+                      size="small"
+                    />
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#999' }}>
+                      当前空间下没有 Bot
+                    </div>
+                  ),
+                }]}
               />
-            ) : (
+            </Card>
+          ))}
+
+          {status.spaces.length === 0 && (
+            <Card>
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                {status.error ? (
-                  <Space direction="vertical">
-                    <CloseCircleFilled style={{ fontSize: 32, color: '#ff4d4f' }} />
-                    <p>获取 Bot 列表失败</p>
-                    <p style={{ fontSize: 13 }}>{status.error}</p>
-                  </Space>
-                ) : (
-                  <Space direction="vertical">
-                    <ApiOutlined style={{ fontSize: 32 }} />
-                    <p>当前工作空间下没有 Bot</p>
-                  </Space>
-                )}
+                <ApiOutlined style={{ fontSize: 32, marginBottom: 12 }} />
+                <p>未检测到任何 Coze Space 配置</p>
+                <p style={{ fontSize: 13 }}>请在 `.env` 文件中配置 `COZE_SPACES_CONFIG`</p>
               </div>
-            )}
-          </Card>
+            </Card>
+          )}
         </>
       )}
     </div>

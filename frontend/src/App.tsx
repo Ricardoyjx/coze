@@ -11,6 +11,8 @@ import {
   DashboardOutlined,
   BarChartOutlined,
   ApiOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   RobotOutlined,
 } from '@ant-design/icons'
 import JDGeneratorPage from './pages/JDGeneratorPage'
@@ -92,6 +94,7 @@ function App() {
     <Layout className="app-layout">
       <Sider
         collapsible
+        trigger={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         collapsed={collapsed}
         onCollapse={setCollapsed}
         theme="dark"
@@ -132,7 +135,7 @@ function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: '1px solid #e8e3dc',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
