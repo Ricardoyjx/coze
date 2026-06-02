@@ -52,3 +52,13 @@ export interface WorkflowRun {
   status: 'running' | 'completed' | 'failed'
   output?: string
 }
+
+export interface OfferEmailRequest {
+  candidateName: string
+  position: string
+  salary: string
+  startDate: string
+  location: string
+  notes?: string
+  companyName?: string
+}

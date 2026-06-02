@@ -49,12 +49,12 @@ export default function JDGeneratorPage() {
       msg,
       (chunk) => {
         setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
+          const last = prev[prev.length - 1]
           if (last.role === 'assistant') {
-            last.content += chunk
+            // 创建新对象而非修改原对象，避免 Strict Mode 双调用导致重复追加
+            return [...prev.slice(0, -1), { ...last, content: last.content + chunk }]
           }
-          return updated
+          return prev
         })
       },
       (fullText) => {
