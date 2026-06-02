@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Row, Col, Card, Input, Button, Space, message, Tag, Slider, Select, Checkbox,
+  Row, Col, Card, Input, Button, Space, message, Tag, Slider, Select, Radio,
 } from 'antd'
 import {
   SendOutlined, CopyOutlined, ThunderboltOutlined, QuestionCircleOutlined,
@@ -37,7 +37,7 @@ export default function InterviewQuestionsPage() {
   const [jdContent, setJdContent] = useState('')
   const [count, setCount] = useState(5)
   const [difficulty, setDifficulty] = useState('medium')
-  const [types, setTypes] = useState<string[]>(['technical', 'behavioral'])
+  const [type, setType] = useState('technical')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState('')
 
@@ -55,7 +55,7 @@ export default function InterviewQuestionsPage() {
         jdContent: jdContent.trim(),
         count,
         difficulty,
-        types,
+        types: [type],
       },
       (chunk) => {
         setResult((prev) => prev + chunk)
@@ -73,6 +73,10 @@ export default function InterviewQuestionsPage() {
   const handleCopy = () => {
     navigator.clipboard.writeText(result)
     message.success('已复制到剪贴板')
+  }
+
+  const handleClear = () => {
+    setResult('')
   }
 
   return (
@@ -152,9 +156,9 @@ export default function InterviewQuestionsPage() {
 
               <div>
                 <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500 }}>题目类型</div>
-                <Checkbox.Group
-                  value={types}
-                  onChange={(vals) => setTypes(vals as string[])}
+                <Radio.Group
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
                   options={typeOptions}
                 />
               </div>
@@ -180,9 +184,14 @@ export default function InterviewQuestionsPage() {
             title="面试题预览"
             extra={
               result && (
-                <Button icon={<CopyOutlined />} onClick={handleCopy}>
-                  复制全文
-                </Button>
+                <Space>
+                  <Button icon={<CopyOutlined />} onClick={handleCopy}>
+                    复制全文
+                  </Button>
+                  <Button onClick={handleClear}>
+                    清除
+                  </Button>
+                </Space>
               )
             }
             style={{ height: 'calc(100vh - 260px)' }}

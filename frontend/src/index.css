@@ -166,3 +166,78 @@ body {
 .ant-layout-sider-trigger .anticon {
   font-size: 12px;
 }
+
+/* ===== 面试题 / JD / Offer 预览区 ===== */
+.jd-preview {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #2c3e50;
+  padding: 4px 0;
+}
+.jd-preview h1,
+.jd-preview h2,
+.jd-preview h3,
+.jd-preview h4 {
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+  color: #1a2a3a;
+}
+.jd-preview h2 {
+  font-size: 20px;
+  border-bottom: 2px solid #e8e3dc;
+  padding-bottom: 8px;
+}
+.jd-preview h3 {
+  font-size: 17px;
+}
+.jd-preview p {
+  margin-bottom: 0.8em;
+}
+.jd-preview strong {
+  color: #d4380d;
+  font-weight: 600;
+}
+.jd-preview ul,
+.jd-preview ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.8em;
+}
+.jd-preview li {
+  margin-bottom: 0.4em;
+}
+.jd-preview hr {
+  border: none;
+  border-top: 1px solid #e8e3dc;
+  margin: 1.2em 0;
+}
+.jd-preview blockquote {
+  border-left: 3px solid #d4380d;
+  padding: 8px 16px;
+  margin: 12px 0;
+  background: #faf8f5;
+  border-radius: 0 4px 4px 0;
+  color: #555;
+}
+.jd-preview code {
+  background: #f5f2ed;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: #d4380d;
+}
+.jd-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+.jd-preview th,
+.jd-preview td {
+  border: 1px solid #e8e3dc;
+  padding: 8px 12px;
+  text-align: left;
+}
+.jd-preview th {
+  background: #f5f2ed;
+  font-weight: 600;
+}

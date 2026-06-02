@@ -227,6 +227,7 @@ async def interview_questions_generator(
                 f"包含{type_str}类型。每道题请给出题目、考察点和参考答案。"
             )
             from cozepy.chat import Message
+            from cozepy.chat import ChatEventType
 
             for event in coze.chat.stream(
                 bot_id=bot_id,
@@ -236,11 +237,12 @@ async def interview_questions_generator(
                 ],
                 auto_save_history=False,
             ):
+                # 只处理增量事件，跳过 completed 等完整内容事件避免重复
+                if event.event != ChatEventType.CONVERSATION_MESSAGE_DELTA:
+                    continue
                 if hasattr(event, "message") and event.message:
                     if hasattr(event.message, "content") and event.message.content:
                         yield event.message.content
-                elif hasattr(event, "content") and event.content:
-                    yield event.content
             return
         except Exception as e:
             yield f"\n\n> Coze调用失败: {str(e)}，使用模拟数据\n\n"
