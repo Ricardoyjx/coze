@@ -24,9 +24,8 @@ app.add_middleware(
 
 def _load_spaces_config() -> dict:
     """
-    优先尝试解析 JSON 格式的 COZE_SPACES_CONFIG；
-    否则自动扫描所有 *_NAME + *_API_KEY + *_BOT_ID 组合。
-    只有同时存在 *_NAME 和 *_API_KEY 的前缀才算有效 space。
+    自动扫描所有 *_NAME 变量，按前缀收集对应的 _API_KEY / _BOT_ID。
+    没有 API Key 的空间也会注册（留给前端展示和后续配置）。
     """
     raw = os.getenv("COZE_SPACES_CONFIG", "").strip()
     if raw:
@@ -35,22 +34,24 @@ def _load_spaces_config() -> dict:
         except _json.JSONDecodeError:
             pass
 
-    # 自动扫描：找所有同时有 *_NAME 和 *_API_KEY 的前缀
+    # 收集所有 *_NAME 前缀
     prefixes: set[str] = set()
     for key in os.environ:
-        if key.endswith("_API_KEY"):
-            prefix = key.removesuffix("_API_KEY")
-            name_key = f"{prefix}_NAME"
-            if prefix and name_key in os.environ:
+        if key.endswith("_NAME"):
+            prefix = key.removesuffix("_NAME")
+            if prefix:
                 prefixes.add(prefix)
+
+    # 排除明显的系统变量
+    skip = {"WSL_DISTRO", "LOG"}
+    prefixes -= skip
 
     spaces: dict = {}
     for prefix in sorted(prefixes):
-        name = os.getenv(f"{prefix}_NAME", prefix)
+        name = os.getenv(f"{prefix}_NAME", "")
         api_key = os.getenv(f"{prefix}_API_KEY", "")
         bot_id = os.getenv(f"{prefix}_BOT_ID", "")
-        if api_key:
-            spaces[prefix.lower()] = {"name": name, "api_key": api_key, "bot_id": bot_id}
+        spaces[prefix.lower()] = {"name": name, "api_key": api_key, "bot_id": bot_id}
 
     # 兜底：单一 token 旧模式
     if not spaces:

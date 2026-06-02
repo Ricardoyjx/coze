@@ -86,8 +86,8 @@ export default function CozePage() {
   return (
     <div>
       <div className="page-header">
-        <h2><ApiOutlined /> Coze 配置状态</h2>
-        <p>多 Space / 多 Bot 配置管理</p>
+        <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}><ApiOutlined /> Coze 配置状态</h2>
+        <p style={{ fontSize: 14, color: '#666', margin: 0 }}>多 Space / 多 Bot 配置管理</p>
       </div>
 
       {error && (
@@ -110,40 +110,39 @@ export default function CozePage() {
                 刷新
               </Button>
             }
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 16, fontSize: 14 }}
           >
-            <Descriptions column={2} size="small">
+            <Descriptions column={4} size="small">
               <Descriptions.Item label="已配置 Space 数">
                 <Tag color="blue">{status.spaces_configured}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="工作流配置数">
+              <Descriptions.Item label="已配置 Bot 数">
                 <Tag color="blue">
-                  {Object.values(status.workflows).filter((w) => w.configured).length}
+                  {status.spaces.filter((s) => s.api_key_configured && !!s.bot_id).length}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>
           </Card>
 
-          <Card title="工作流配置" style={{ marginBottom: 16 }}>
+          <Card title="Bot ID 状态" style={{ marginBottom: 16, fontSize: 14 }}>
             <Table
-              dataSource={Object.entries(status.workflows).map(([key, val]) => ({
-                key,
-                label: ({
-                  jd_generate: 'JD 生成',
-                  screening: '简历初筛',
-                  offer_email: 'Offer 邮件',
-                } as Record<string, string>)[key] || key,
-                ...val,
+              dataSource={status.spaces.map((s) => ({
+                key: s.space_id,
+                label: s.name || s.space_id,
+                space_id: s.space_id,
+                configured: s.api_key_configured && !!s.bot_id,
+                bot_id: s.bot_id,
+                api_ok: s.api_key_configured,
               }))}
               columns={[
-                { title: '功能', dataIndex: 'label', key: 'label' },
+                { title: 'Space', dataIndex: 'label', key: 'label' },
                 {
-                  title: '状态', dataIndex: 'configured', key: 'configured',
-                  render: (v: boolean) => TagStatus(v),
+                  title: 'API Key', dataIndex: 'api_ok', key: 'api_ok',
+                  render: (v: boolean) => TagStatus(v, v ? '已配置' : '未配置'),
                 },
                 {
-                  title: 'Workflow ID', dataIndex: 'id', key: 'id',
-                  render: (v: string) => v ? '******' : '-',
+                  title: 'Bot ID', dataIndex: 'bot_id', key: 'bot_id',
+                  render: (v: string) => v ? <Tag color="blue">{v}</Tag> : <span style={{ color: '#999' }}>-</span>,
                 },
               ]}
               rowKey="key"
@@ -162,11 +161,11 @@ export default function CozePage() {
                   {TagStatus(space.api_key_configured)}
                 </Space>
               }
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 16, fontSize: 14 }}
             >
-              <Descriptions column={2} size="small" style={{ marginBottom: 12 }}>
+              <Descriptions column={3} size="small" style={{ marginBottom: 12 }}>
                 <Descriptions.Item label="API Key">
-                  {space.api_key_configured ? '******' : <span style={{ color: '#999' }}>未配置</span>}
+                  {space.api_key_configured ? <Tag color="green">已配置</Tag> : <span style={{ color: '#999' }}>未配置</span>}
                 </Descriptions.Item>
                 <Descriptions.Item label="当前 Bot">
                   {space.bot_id
@@ -188,12 +187,12 @@ export default function CozePage() {
 
               <Collapse
                 size="small"
-                defaultActiveKey={space.bot_id ? [] : ['bots']}
+                defaultActiveKey={[]}
                 items={[{
                   key: 'bots',
                   label: (
                     <Space>
-                      <span>Bot 列表</span>
+                      <span style={{ fontWeight: 500 }}>Bot 列表</span>
                       <Tag>{space.bots.length}</Tag>
                     </Space>
                   ),

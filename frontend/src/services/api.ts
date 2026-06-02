@@ -325,6 +325,7 @@ export interface CozeSpace {
   name: string
   api_key_configured: boolean
   bot_id: string
+  workspaces: { id: string; name: string }[]
   bots: { bot_id: string; name: string; description: string; status: string }[]
   error?: string
 }
