@@ -8,6 +8,7 @@ import {
   Row,
   Col,
   Progress,
+
   Tag,
   Space,
   message,
@@ -21,6 +22,7 @@ import {
   TrophyOutlined,
   StarFilled,
 } from '@ant-design/icons'
+import MarioRunning from '../components/MarioRunning'
 import { streamScreeningRun } from '../services/api'
 
 const { TextArea } = Input
@@ -182,22 +184,32 @@ export default function ResumeScreeningPage() {
 
       {step === 1 && (
         <Card style={{ textAlign: 'center', padding: '60px 0' }}>
-          <Progress
-            type="circle"
-            percent={progress}
-            size={160}
-            strokeColor="#1677ff"
-            format={(p) => `${p}%`}
-          />
-          <h3 style={{ marginTop: 24 }}>AI正在分析简历...</h3>
-          <p style={{ color: '#666' }}>
-            {statusText || `正在解析简历内容并进行匹配度计算，共 ${uploadFiles.length} 份简历`}
-          </p>
-          {results.length > 0 && (
-            <p style={{ color: '#52c41a', fontSize: 13, marginTop: 8 }}>
-              已解析 {results.length} 份简历
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <MarioRunning />
+            <h3 style={{ margin: 0, fontSize: 18 }}>AI正在分析简历...</h3>
+            <p style={{ color: '#666', margin: 0 }}>
+              {statusText || `正在解析简历内容并进行匹配度计算，共 ${uploadFiles.length} 份简历`}
             </p>
-          )}
+            <div style={{
+              width: 200,
+              height: 6,
+              background: '#f0f0f0',
+              borderRadius: 3,
+              overflow: 'hidden',
+              marginTop: 8,
+            }}>
+              <div style={{
+                width: `${progress}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #e53e30, #f5a623)',
+                borderRadius: 3,
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+            <span style={{ color: '#999', fontSize: 13 }}>
+              {progress}% ({results.length}/{uploadFiles.length})
+            </span>
+          </div>
         </Card>
       )}
 
@@ -243,7 +255,7 @@ export default function ResumeScreeningPage() {
 
           {sortedResults.map((result, index) => (
             <Card key={result.id} className="score-card" style={{ marginBottom: 16 }}>
-              <Row gutter={24} align="middle">
+              <Row gutter={24}>
                 <Col xs={24} sm={4} style={{ textAlign: 'center' }}>
                   {index < 3 && (
                     <TrophyOutlined
@@ -272,21 +284,25 @@ export default function ResumeScreeningPage() {
                   <p style={{ margin: 0, color: '#666', fontSize: 13 }}>{result.resume.email}</p>
                   <div style={{ marginTop: 4 }}>{recommendTag(result.recommendation)}</div>
                 </Col>
-                <Col xs={24} sm={7}>
+                <Col xs={24} sm={8}>
                   <div style={{ fontSize: 13, marginBottom: 4, color: '#52c41a' }}>✅ 匹配点：</div>
-                  {(result.matchPoints || []).map((p: string, i: number) => (
-                    <Tag key={i} color="green" style={{ marginBottom: 4, fontSize: 12 }}>{p}</Tag>
-                  ))}
+                  <div>
+                    {(result.matchPoints || []).map((p: string, i: number) => (
+                      <Tag key={i} color="green" style={{ marginBottom: 4, fontSize: 12, whiteSpace: 'normal', height: 'auto', padding: '2px 8px', lineHeight: '20px' }}>{p}</Tag>
+                    ))}
+                  </div>
                   <div style={{ fontSize: 13, marginBottom: 4, marginTop: 8, color: '#ff4d4f' }}>❌ 缺失项：</div>
-                  {(result.missingPoints || []).map((p: string, i: number) => (
-                    <Tag key={i} color="red" style={{ marginBottom: 4, fontSize: 12 }}>{p}</Tag>
-                  ))}
+                  <div>
+                    {(result.missingPoints || []).map((p: string, i: number) => (
+                      <Tag key={i} color="red" style={{ marginBottom: 4, fontSize: 12, whiteSpace: 'normal', height: 'auto', padding: '2px 8px', lineHeight: '20px' }}>{p}</Tag>
+                    ))}
+                  </div>
                 </Col>
-                <Col xs={24} sm={7}>
-                  <p style={{ fontSize: 13, lineHeight: 1.8, margin: 0 }}>{result.summary}</p>
+                <Col xs={24} sm={6}>
+                  <p style={{ fontSize: 13, lineHeight: 1.8, margin: 0, wordBreak: 'break-word' }}>{result.summary}</p>
                   <Space style={{ marginTop: 8 }}>
-                    <Button size="small">查看简历</Button>
-                    <Button size="small" type="primary">安排面试</Button>
+                    <Button size="small" onClick={() => window.open(`/api/resume/${result.id}/file`, "_blank")}>查看简历</Button>
+
                   </Space>
                 </Col>
               </Row>
@@ -294,14 +310,9 @@ export default function ResumeScreeningPage() {
           ))}
 
           <div style={{ textAlign: 'center', marginTop: 24 }}>
-            <Space>
-              <Button onClick={() => { setStep(0); setResults([]); setUploadFiles([]); setJdContent('') }}>
-                重新筛选
-              </Button>
-              <Button type="primary" onClick={() => message.success('已导出Excel')}>
-                导出Excel
-              </Button>
-            </Space>
+            <Button onClick={() => { setStep(0); setResults([]); setUploadFiles([]); setJdContent('') }}>
+              重新筛选
+            </Button>
           </div>
         </>
       )}

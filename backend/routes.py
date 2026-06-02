@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from fastapi import UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 from config import (
     app,
@@ -32,6 +32,7 @@ from services import (
     jd_stream_generator,
     offer_stream_generator,
     interview_questions_generator,
+    resume_screening_generator,
 )
 
 # ===================== JD =====================
@@ -58,15 +59,43 @@ async def list_jds():
 async def upload_resumes_endpoint(files: list[UploadFile] = File(...)):
     results = []
     for f in files:
-        content = await f.read()
+        raw_bytes = await f.read()
         resume_id = str(uuid.uuid4())[:8]
+        raw_text = ""
+        if f.filename and f.filename.lower().endswith(".pdf"):
+            try:
+                from io import BytesIO
+                from pypdf import PdfReader
+
+                reader = PdfReader(BytesIO(raw_bytes))
+                for page in reader.pages:
+                    raw_text += page.extract_text() or ""
+            except Exception:
+                raw_text = ""
+        elif f.filename and f.filename.lower().endswith((".doc", ".docx")):
+            try:
+                from io import BytesIO
+                from docx import Document
+
+                doc = Document(BytesIO(raw_bytes))
+                for para in doc.paragraphs:
+                    raw_text += para.text + "\n"
+            except Exception:
+                raw_text = ""
+        else:
+            raw_text = raw_bytes.decode("utf-8", errors="replace")
+
         resume = ResumeData(
             id=resume_id,
             filename=f.filename or "unknown",
+            raw_text=raw_text,
+            file_bytes=raw_bytes,
             uploadedAt=datetime.now().isoformat(),
         )
         uploaded_resumes[resume_id] = resume
-        results.append({"id": resume_id, "filename": f.filename, "size": len(content)})
+        results.append(
+            {"id": resume_id, "filename": f.filename, "size": len(raw_bytes)}
+        )
     return {"uploaded": len(results), "resumes": results}
 
 
@@ -326,184 +355,46 @@ async def batch_screen(req: BatchScreenRequest):
 
 @app.post("/api/resume/screening/run")
 async def run_screening(req: ScreeningRequest):
-    task_id = str(uuid.uuid4())[:8]
-    total = len(req.resumeIds)
-    candidate_pool = [
-        (
-            "张三",
-            "Java",
-            ["Java", "Spring Boot", "微服务", "MySQL", "Redis", "Docker"],
-            6,
-            "本科·北京大学",
-            92,
-            "strong",
-            ["6年Java开发经验", "精通Spring Boot微服务", "熟悉Docker容器化部署"],
-            ["缺少大数据处理经验"],
-            "候选人技术栈与岗位高度匹配，微服务经验丰富，强烈推荐面试。",
-        ),
-        (
-            "李四",
-            "Java",
-            ["Java", "Spring Cloud", "MySQL", "Kafka"],
-            4,
-            "硕士·清华大学",
-            78,
-            "moderate",
-            ["硕士学历背景优秀", "熟悉Spring Cloud体系"],
-            ["工作年限略短", "缺少Docker/K8s经验"],
-            "候选人学历优秀，技术基础扎实，但微服务部署经验偏弱，建议考虑。",
-        ),
-        (
-            "王五",
-            "Python",
-            ["Python", "Django", "PostgreSQL"],
-            3,
-            "本科·武汉大学",
-            35,
-            "weak",
-            ["有后端开发经验"],
-            ["主要技术栈为Python非Java", "无微服务经验", "工作年限不足"],
-            "候选人技术栈与岗位需求不匹配，主要使用Python而非Java，不推荐。",
-        ),
-        (
-            "赵六",
-            "Java",
-            ["Java", "Spring", "MyBatis", "RabbitMQ"],
-            5,
-            "本科·华中科技",
-            72,
-            "moderate",
-            ["5年Java开发经验", "熟悉消息队列"],
-            ["缺少微服务实战经验", "云原生经验不足"],
-            "候选人Java基础扎实，但微服务和云原生经验偏弱，建议进一步沟通。",
-        ),
-        (
-            "钱七",
-            "Go",
-            ["Go", "Gin", "gRPC", "K8s", "Docker"],
-            7,
-            "本科·浙江大学",
-            88,
-            "strong",
-            ["7年后端开发经验", "精通K8s和Docker", "微服务架构经验丰富"],
-            ["主要技术栈为Go而非Java"],
-            "候选人虽主用Go，但架构能力和云原生经验突出，值得考虑跨技术栈培养。",
-        ),
-        (
-            "孙八",
-            "Java",
-            ["Java", "Spring Boot", "MongoDB", "ES"],
-            3,
-            "硕士·南京大学",
-            65,
-            "moderate",
-            ["硕士学历", "熟悉Spring Boot"],
-            ["工作年限较短", "缺少微服务架构经验"],
-            "候选人基础和学历不错，但经验尚浅，建议作为后备人选。",
-        ),
-        (
-            "周九",
-            "C++",
-            ["C++", "Qt", "STL", "Linux"],
-            8,
-            "本科·哈工大",
-            45,
-            "weak",
-            ["8年C++开发经验", "Linux系统编程经验丰富"],
-            ["主要技术栈为C++而非Java", "无微服务经验", "无Java生态经验"],
-            "候选人技术栈与Java岗位严重不匹配，不推荐。",
-        ),
-        (
-            "吴十",
-            "Java",
-            ["Java", "Spring Cloud", "Nacos", "Sentinel", "MySQL"],
-            6,
-            "本科·西安交大",
-            82,
-            "strong",
-            ["6年Java开发经验", "精通Spring Cloud体系", "有高并发经验"],
-            ["学历背景一般"],
-            "候选人Java技术栈扎实，微服务和高并发经验匹配度高，推荐面试。",
-        ),
-        (
-            "郑十一",
-            "前端",
-            ["React", "TypeScript", "Webpack", "Node.js"],
-            4,
-            "本科·电子科大",
-            50,
-            "weak",
-            ["4年前端开发经验", "熟悉React生态"],
-            ["技术栈为前端而非Java/后端", "缺少后端服务开发经验"],
-            "候选人偏前端方向，与后端岗位JD不匹配，不推荐。",
-        ),
-        (
-            "冯十二",
-            "Java",
-            ["Java", "Spring", "Dubbo", "Zookeeper", "MyBatis"],
-            9,
-            "本科·北京邮电",
-            90,
-            "strong",
-            ["9年Java开发经验", "精通Dubbo和分布式架构", "大厂背景"],
-            ["对新兴技术栈了解较少"],
-            "候选人Java经验深厚，分布式架构能力强，强烈推荐。",
-        ),
-    ]
-
-    async def event_generator():
-        results = []
-        for i in range(total):
-            await asyncio.sleep(0.8)
-            idx = i % len(candidate_pool)
-            (
-                name,
-                tech,
-                skills,
-                work_years,
-                edu,
-                score,
-                rec,
-                matches,
-                misses,
-                summary,
-            ) = candidate_pool[idx]
-            resume_id = req.resumeIds[i] if i < len(req.resumeIds) else f"auto_{i}"
-            result_item = {
-                "id": resume_id,
-                "resume": {
-                    "id": resume_id,
-                    "filename": f"{name}_简历.pdf",
-                    "name": name,
-                    "phone": f"138{str(i+1).zfill(8)}",
-                    "email": f"{name}@email.com",
-                    "education": edu,
-                    "workYears": work_years,
-                    "skills": skills,
-                    "experience": f"{work_years}年{tech}开发经验",
-                    "uploadedAt": datetime.now().isoformat(),
-                },
-                "score": score,
-                "matchPoints": matches,
-                "missingPoints": misses,
-                "recommendation": rec,
-                "summary": summary,
-            }
-            results.append(result_item)
-            progress_data = {
-                "id": task_id,
-                "status": "processing" if i < total - 1 else "completed",
-                "totalResumes": total,
-                "processedResumes": i + 1,
-                "results": results,
-                "createdAt": datetime.now().isoformat(),
-            }
-            yield f"data: {json.dumps(progress_data, ensure_ascii=False)}\n\n"
+    """使用 Coze Bot 对上传的简历进行真实 AI 初筛评分。"""
+    resume_items = []
+    for rid in req.resumeIds:
+        rd = uploaded_resumes.get(rid)
+        if rd:
+            resume_items.append(rd.model_dump())
+        else:
+            resume_items.append({"id": rid, "filename": "unknown", "raw_text": ""})
 
     return StreamingResponse(
-        event_generator(),
+        resume_screening_generator(req.jdContent, resume_items),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+# ===================== 简历文件 =====================
+
+
+@app.get("/api/resume/{resume_id}/file")
+async def get_resume_file(resume_id: str):
+    """返回上传的简历原始文件供预览/下载。"""
+    rd = uploaded_resumes.get(resume_id)
+    if not rd:
+        raise HTTPException(status_code=404, detail="简历不存在")
+    if not rd.file_bytes:
+        raise HTTPException(status_code=404, detail="文件内容已过期")
+    filename = rd.filename or "resume.pdf"
+    media_type = "application/octet-stream"
+    if filename.lower().endswith(".pdf"):
+        media_type = "application/pdf"
+    elif filename.lower().endswith((".doc", ".docx")):
+        media_type = "application/msword"
+    return Response(
+        content=rd.file_bytes,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 

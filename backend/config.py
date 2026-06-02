@@ -22,6 +22,7 @@ app.add_middleware(
 
 # ===================== Coze 多Space配置 =====================
 
+
 def _load_spaces_config() -> dict:
     """
     自动扫描所有 *_NAME 变量，按前缀收集对应的 _API_KEY / _BOT_ID。
@@ -68,10 +69,13 @@ JD_WORKFLOW_ID: str = os.getenv("COZE_JD_WORKFLOW_ID", "")
 SCREEN_WORKFLOW_ID: str = os.getenv("COZE_SCREEN_WORKFLOW_ID", "")
 OFFER_WORKFLOW_ID: str = os.getenv("COZE_OFFER_WORKFLOW_ID", "")
 
+
 # ===================== 内存存储 =====================
 class ResumeData(BaseModel):
     id: str
     filename: str
+    raw_text: str = ""
+    file_bytes: bytes = b""
     name: str = ""
     phone: str = ""
     email: str = ""
@@ -80,6 +84,7 @@ class ResumeData(BaseModel):
     skills: list[str] = []
     experience: str = ""
     uploadedAt: str = ""
+
 
 uploaded_resumes: dict[str, ResumeData] = {}
 screening_tasks: dict[str, dict] = {}

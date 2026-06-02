@@ -190,13 +190,25 @@ body {
 }
 .jd-preview h3 {
   font-size: 17px;
+  color: #1a2a3a;
+  border-bottom: 1px solid #e8e3dc;
+  padding-bottom: 6px;
 }
 .jd-preview p {
   margin-bottom: 0.8em;
 }
 .jd-preview strong {
-  color: #d4380d;
+  color: #1677ff;
   font-weight: 600;
+}
+/* 面试题字段标签（题目/考察点/参考答案）使用蓝色，描述文本内容用深灰 */
+.jd-preview li strong {
+  color: #1677ff;
+}
+.jd-preview li {
+  color: #2c3e50;
+  margin-bottom: 0.6em;
+  line-height: 1.7;
 }
 .jd-preview ul,
 .jd-preview ol {

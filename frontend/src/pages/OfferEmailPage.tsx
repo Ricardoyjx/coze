@@ -106,7 +106,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>候选人姓名 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>候选人姓名 *</div>
                 <Input
                   value={candidateName}
                   onChange={(e) => setCandidateName(e.target.value)}
@@ -115,7 +115,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>录用岗位 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>录用岗位 *</div>
                 <Select
                   value={position || undefined}
                   onChange={setPosition}
@@ -135,7 +135,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>薪资待遇 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>薪资待遇 *</div>
                 <Input
                   value={salary}
                   onChange={(e) => setSalary(e.target.value)}
@@ -144,10 +144,10 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>报到日期 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>报到日期 *</div>
                 <DatePicker
-                  value={startDate ? dayjs(startDate) : null}
-                  onChange={(date) => setStartDate(date ? date.format('YYYY年M月D日') : '')}
+                  value={startDate ? dayjs(startDate, 'YYYY-MM-DD') : null}
+                  onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
                   style={{ width: '100%' }}
                   placeholder="选择报到日期"
                   disabledDate={(current) => current && current.isBefore(dayjs(), 'day')}
@@ -155,7 +155,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>工作地点 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>工作地点 *</div>
                 <Input
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
@@ -164,7 +164,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>公司名称 *</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>公司名称 *</div>
                 <Input
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
@@ -173,7 +173,7 @@ export default function OfferEmailPage() {
               </div>
 
               <div>
-                <div style={{ marginBottom: 4, fontSize: 14, color: "##333", fontWeight: 500 }}>备注信息</div>
+                <div style={{ marginBottom: 4, fontSize: 14, color: "#333", fontWeight: 500 }}>备注信息</div>
                 <TextArea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

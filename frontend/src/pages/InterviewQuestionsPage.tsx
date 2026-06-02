@@ -35,7 +35,7 @@ const quickTemplates = [
 export default function InterviewQuestionsPage() {
   const [position, setPosition] = useState('')
   const [jdContent, setJdContent] = useState('')
-  const [count, setCount] = useState(5)
+  const [count, setCount] = useState(3)
   const [difficulty, setDifficulty] = useState('medium')
   const [type, setType] = useState('technical')
   const [loading, setLoading] = useState(false)
@@ -136,11 +136,11 @@ export default function InterviewQuestionsPage() {
               <div>
                 <div style={{ marginBottom: 4, fontSize: 14, fontWeight: 500 }}>题目数量：{count} 题</div>
                 <Slider
-                  min={3}
-                  max={15}
+                  min={1}
+                  max={5}
                   value={count}
                   onChange={setCount}
-                  marks={{ 3: '3', 5: '5', 10: '10', 15: '15' }}
+                  marks={{ 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' }}
                 />
               </div>
 
