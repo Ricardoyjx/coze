@@ -10,6 +10,7 @@ import {
   CustomerServiceOutlined,
   DashboardOutlined,
   BarChartOutlined,
+  ApiOutlined,
   RobotOutlined,
 } from '@ant-design/icons'
 import JDGeneratorPage from './pages/JDGeneratorPage'
@@ -20,10 +21,11 @@ import OfferEmailPage from './pages/OfferEmailPage'
 import MockInterviewPage from './pages/MockInterviewPage'
 import DashboardPage from './pages/DashboardPage'
 import SalaryAnalysisPage from './pages/SalaryAnalysisPage'
+import CozePage from "./pages/CozePage"
 
 const { Header, Sider, Content } = Layout
 
-const menuItems = [
+const mainMenuItems = [
   {
     key: '/jd',
     icon: <FileTextOutlined />,
@@ -66,6 +68,14 @@ const menuItems = [
   },
 ]
 
+const bottomMenuItems = [
+  {
+    key: '/coze',
+    icon: <ApiOutlined />,
+    label: 'Coze配置',
+  },
+]
+
 function App() {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
@@ -75,7 +85,8 @@ function App() {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken()
 
-  const basePath = '/' + (location.pathname.split('/')[1] || 'jd')
+    const basePath = '/' + (location.pathname.split('/')[1] || 'jd')
+  const bottomSelected = bottomMenuItems.find((item) => item.key === basePath) ? basePath : ''
 
   return (
     <Layout className="app-layout">
@@ -84,19 +95,34 @@ function App() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         theme="dark"
-        style={{ overflow: 'auto', height: '100vh', position: 'fixed', left: 0, top: 0, bottom: 0 }}
+        width={200}
+        style={{ height: '100vh', position: 'fixed', left: 0, top: 0, bottom: 0 }}
       >
-        <div className="logo">
-          <RobotOutlined style={{ fontSize: 24 }} />
-          {!collapsed && <span>招聘助手</span>}
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div className="logo">
+            <RobotOutlined style={{ fontSize: 24 }} />
+            {!collapsed && <span>招聘助手</span>}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <Menu
+              theme="dark"
+              mode="inline"
+              selectedKeys={[basePath]}
+              items={mainMenuItems}
+              onClick={({ key }) => navigate(key)}
+            />
+          </div>
+          <div>
+            <Menu
+              theme="dark"
+              mode="inline"
+              selectedKeys={[bottomSelected]}
+              items={bottomMenuItems}
+              onClick={({ key }) => navigate(key)}
+              style={{ borderInlineEnd: 'none' }}
+            />
+          </div>
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[basePath]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
       </Sider>
       <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
         <Header
@@ -135,6 +161,7 @@ function App() {
             <Route path="/mock-interview" element={<MockInterviewPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/salary" element={<SalaryAnalysisPage />} />
+            <Route path="/coze" element={<CozePage />} />
           </Routes>
         </Content>
       </Layout>

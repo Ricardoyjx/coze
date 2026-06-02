@@ -602,3 +602,57 @@ async def run_screening(req: ScreeningRequest):
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+# ===================== Coze 配置检测 =====================
+
+
+@app.get("/api/coze/status")
+async def coze_status():
+    """返回Coze配置状态和可用的Bot列表"""
+    result = {
+        "token_configured": bool(COZE_API_TOKEN),
+        "workflows": {
+            "jd_generate": {"id": JD_WORKFLOW_ID, "configured": bool(JD_WORKFLOW_ID)},
+            "screening": {"id": SCREEN_WORKFLOW_ID, "configured": bool(SCREEN_WORKFLOW_ID)},
+            "offer_email": {"id": os.getenv("COZE_OFFER_WORKFLOW_ID", ""), "configured": bool(os.getenv("COZE_OFFER_WORKFLOW_ID", ""))},
+        },
+        "bots": [],
+        "workspaces": [],
+        "error": None,
+    }
+
+    if not COZE_API_TOKEN:
+        result["error"] = "COZE_API_TOKEN 未配置"
+        return result
+
+    try:
+        coze = get_coze_client()
+        if not coze:
+            result["error"] = "Coze 客户端初始化失败"
+            return result
+
+        # 获取工作空间列表
+        workspaces = list(coze.workspaces.list())
+        for ws in workspaces:
+            ws_info = {"id": ws.id if hasattr(ws, "id") else "", "name": ws.name if hasattr(ws, "name") else ""}
+            result["workspaces"].append(ws_info)
+
+            # 获取每个工作空间下的 Bot
+            try:
+                bots = list(coze.bots.list(space_id=ws.id))
+                for bot in bots:
+                    bot_info = {
+                        "bot_id": bot.bot_id if hasattr(bot, "bot_id") else "",
+                        "name": bot.name if hasattr(bot, "name") else "",
+                        "description": bot.description if hasattr(bot, "description") else "",
+                        "status": bot.status if hasattr(bot, "status") else "",
+                    }
+                    result["bots"].append(bot_info)
+            except Exception as e:
+                result["error"] = f"获取工作空间 {ws.id} 的 Bot 列表失败: {str(e)}"
+
+    except Exception as e:
+        result["error"] = f"Coze API 调用失败: {str(e)}"
+
+    return result

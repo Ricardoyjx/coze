@@ -316,3 +316,21 @@ export async function streamScreeningRun(
     onError?.(err as Error)
   }
 }
+
+// ====== Coze 配置相关 API ======
+
+export interface CozeStatus {
+  token_configured: boolean
+  workflows: {
+    [key: string]: { id: string; configured: boolean }
+  }
+  bots: { bot_id: string; name: string; description: string; status: string }[]
+  workspaces: { id: string; name: string }[]
+  error: string | null
+}
+
+export async function fetchCozeStatus(): Promise<CozeStatus> {
+  const res = await fetch('/api/coze/status')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
