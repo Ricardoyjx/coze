@@ -196,3 +196,90 @@ async def offer_stream_generator(
     for char in mock_email:
         yield char
         await asyncio.sleep(0.02)
+
+
+# ===================== 面试题生成（流式） =====================
+
+
+async def interview_questions_generator(
+    position: str,
+    jd_content: str = "",
+    count: int = 5,
+    difficulty: str = "medium",
+    types: list[str] | None = None,
+):
+    if types is None:
+        types = ["technical", "behavioral"]
+
+    coze = get_coze_client("interview_questions")
+    bot_id = COZE_SPACES.get("interview_questions", {}).get("bot_id", "")
+
+    if coze and bot_id:
+        try:
+            diff_map = {"easy": "简单", "medium": "中等", "hard": "困难"}
+            prompt = f"岗位: {position}\n"
+            if jd_content:
+                prompt += f"岗位描述: {jd_content}\n"
+            type_str = "、".join(types)
+            diff_str = diff_map.get(difficulty, "中等")
+            prompt += (
+                f"\n请为该岗位生成{count}道{diff_str}难度的面试题，"
+                f"包含{type_str}类型。每道题请给出题目、考察点和参考答案。"
+            )
+            from cozepy.chat import Message
+
+            for event in coze.chat.stream(
+                bot_id=bot_id,
+                user_id="recruitment-agent",
+                additional_messages=[
+                    Message(role="user", content=prompt, content_type="text")
+                ],
+                auto_save_history=False,
+            ):
+                if hasattr(event, "message") and event.message:
+                    if hasattr(event.message, "content") and event.message.content:
+                        yield event.message.content
+                elif hasattr(event, "content") and event.content:
+                    yield event.content
+            return
+        except Exception as e:
+            yield f"\n\n> Coze调用失败: {str(e)}，使用模拟数据\n\n"
+
+    diff_label = {"easy": "简单", "medium": "中等", "hard": "困难"}.get(
+        difficulty, "中等"
+    )
+    type_label = "、".join(types)
+    mock_data = (
+        f"## 面试题 - {position}\n"
+        f"> 难度: {diff_label} | 数量: {count} 题 | 类型: {type_label}\n"
+        f"\n"
+        f"### 一、技术题\n"
+        f"\n---\n"
+        f"\n**题目 1：** 请解释您对该岗位核心技术的理解，以及相关项目的实践经验。\n"
+        f"\n- **考察点：** 技术深度、项目经验、系统设计能力\n"
+        f"- **参考答案：** 候选人应能清晰阐述核心技术原理，并结合实际项目说明应用场景和解决的问题。\n"
+        f"\n---\n"
+        f"\n**题目 2：** 请描述您参与过的最有挑战性的一个技术项目，您在其中的角色和贡献。\n"
+        f"\n- **考察点：** 项目经验、问题解决能力、团队协作\n"
+        f"- **参考答案：** 候选人应能具体描述项目背景、技术难点、个人贡献和最终成果。\n"
+        f"\n---\n"
+        f"\n**题目 3：** 如何处理系统性能瓶颈？请结合具体工具和方法说明。\n"
+        f"\n- **考察点：** 性能优化经验、工具使用能力\n"
+        f"- **参考答案：** 应涵盖性能分析工具、常见优化策略（缓存、索引、异步等）和实际案例。\n"
+        f"\n---\n"
+        f"\n### 二、行为题\n"
+        f"\n---\n"
+        f"\n**题目 4：** 请举例说明您如何处理与团队成员在技术方案上的分歧。\n"
+        f"\n- **考察点：** 沟通能力、冲突解决、团队合作\n"
+        f"- **参考答案：** 应展示理性讨论、数据驱动决策、尊重他人意见的态度。\n"
+        f"\n---\n"
+        f"\n**题目 5：** 您如何进行技术学习和自我提升？请分享您的学习方法。\n"
+        f"\n- **考察点：** 学习能力、自驱力、技术热情\n"
+        f"- **参考答案：** 应展示持续学习的习惯，如阅读源码、参与开源、技术博客等。\n"
+        f"\n---\n"
+        f"\n> 📝 *此面试题由AI自动生成，仅供参考。建议根据实际业务场景调整。*\n"
+    )
+
+    for char in mock_data:
+        yield char
+        await asyncio.sleep(0.02)

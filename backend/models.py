@@ -33,3 +33,11 @@ class BatchScreenRequest(BaseModel):
     jdContent: str
     resumeCount: int = 10
     threshold: int = 60
+
+
+class InterviewQuestionsRequest(BaseModel):
+    position: str
+    jdContent: str = ""
+    count: int = 5
+    difficulty: str = "medium"
+    types: list[str] = ["technical", "behavioral"]

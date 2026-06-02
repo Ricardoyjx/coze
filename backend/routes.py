@@ -20,13 +20,19 @@ from config import (
     ResumeData,
 )
 from models import (
+    InterviewQuestionsRequest,
     JDGenerateRequest,
     ScreeningRequest,
     OfferEmailRequest,
     SalaryAnalysisRequest,
     BatchScreenRequest,
 )
-from services import get_coze_client, jd_stream_generator, offer_stream_generator
+from services import (
+    get_coze_client,
+    jd_stream_generator,
+    offer_stream_generator,
+    interview_questions_generator,
+)
 
 # ===================== JD =====================
 
@@ -497,6 +503,24 @@ async def run_screening(req: ScreeningRequest):
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+# ===================== 面试题 =====================
+
+
+@app.post("/api/interview-questions/generate")
+async def generate_interview_questions(req: InterviewQuestionsRequest):
+    return StreamingResponse(
+        interview_questions_generator(
+            position=req.position,
+            jd_content=req.jdContent,
+            count=req.count,
+            difficulty=req.difficulty,
+            types=req.types,
+        ),
+        media_type="text/plain",
         headers={"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"},
     )
 

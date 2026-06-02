@@ -354,3 +354,52 @@ export async function selectCozeBot(spaceId: string, botId: string) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
+
+// ====== 面试题生成相关 API ======
+
+export async function streamInterviewQuestions(
+  data: {
+    position: string
+    jdContent?: string
+    count?: number
+    difficulty?: string
+    types?: string[]
+  },
+  onChunk: (text: string) => void,
+  onDone: (fullText: string) => void,
+  onError?: (err: Error) => void,
+) {
+  try {
+    const response = await fetch('/api/interview-questions/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        position: data.position,
+        jdContent: data.jdContent || "",
+        count: data.count || 5,
+        difficulty: data.difficulty || "medium",
+        types: data.types || ["technical", "behavioral"],
+      }),
+    })
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let fullText = ''
+
+    if (!reader) throw new Error('No reader available')
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      fullText += chunk
+      onChunk(chunk)
+    }
+
+    onDone(fullText)
+  } catch (err: any) {
+    if (onError) onError(err)
+  }
+}
