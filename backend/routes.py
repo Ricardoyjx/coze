@@ -2,10 +2,13 @@ import json
 import uuid
 import asyncio
 import os
+import logging
 from datetime import datetime
 
 from fastapi import UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, Response
+
+logger = logging.getLogger(__name__)
 
 from config import (
     app,
@@ -33,6 +36,8 @@ from services import (
     offer_stream_generator,
     interview_questions_generator,
     resume_screening_generator,
+    salary_analysis_generator,
+    batch_screening_generator,
 )
 
 # ===================== JD =====================
@@ -185,169 +190,55 @@ async def generate_offer_email(req: OfferEmailRequest):
 
 @app.post("/api/salary/analyze")
 async def analyze_salary(req: SalaryAnalysisRequest):
-    position = req.position
-    city = req.city or "全国"
+    """调用 Coze Bot 进行真实薪资分析，Bot 未配置时使用本地兜底数据。"""
+    import json as _json
 
-    mock_data = {
-        "position": position,
-        "city": city,
-        "experience": req.experience or "3-5年",
-        "education": req.education or "本科",
-        "salaryRange": {"min": 15, "max": 45, "median": 25},
-        "percentiles": {"p10": 12, "p25": 18, "p50": 25, "p75": 32, "p90": 40},
-        "industryAvg": 26,
-        "cityAvg": 24,
-        "experienceLevels": [
-            {"level": "1年以下", "salary": 10},
-            {"level": "1-3年", "salary": 16},
-            {"level": "3-5年", "salary": 22},
-            {"level": "5-10年", "salary": 30},
-            {"level": "10年以上", "salary": 40},
-        ],
-        "educationImpact": [
-            {"level": "大专", "salary": 18},
-            {"level": "本科", "salary": 25},
-            {"level": "硕士", "salary": 32},
-            {"level": "博士", "salary": 40},
-        ],
-        "recommendedRange": "22K - 32K",
-        "confidence": "高",
-    }
+    async def _stream():
+        result_text = ""
+        async for chunk in salary_analysis_generator(
+            position=req.position,
+            city=req.city,
+            experience=req.experience,
+            education=req.education,
+        ):
+            result_text = chunk  # generator yields one full JSON string
+        yield result_text
 
-    pl = position.lower()
-    if any(kw in pl for kw in ["java", "后端", "go", "python", "c++", "c#", "rust"]):
-        mock_data["salaryRange"] = {"min": 18, "max": 50, "median": 28}
-        mock_data["percentiles"] = {
-            "p10": 15,
-            "p25": 20,
-            "p50": 28,
-            "p75": 35,
-            "p90": 45,
-        }
-        mock_data["industryAvg"] = 28
-        mock_data["recommendedRange"] = "25K - 38K"
-    elif any(kw in pl for kw in ["前端", "web", "react", "vue", "angular"]):
-        mock_data["salaryRange"] = {"min": 15, "max": 42, "median": 24}
-        mock_data["percentiles"] = {
-            "p10": 12,
-            "p25": 18,
-            "p50": 24,
-            "p75": 32,
-            "p90": 38,
-        }
-        mock_data["industryAvg"] = 24
-        mock_data["recommendedRange"] = "20K - 32K"
-    elif any(kw in pl for kw in ["产品", "产品经理"]):
-        mock_data["salaryRange"] = {"min": 15, "max": 45, "median": 25}
-        mock_data["percentiles"] = {
-            "p10": 12,
-            "p25": 18,
-            "p50": 25,
-            "p75": 33,
-            "p90": 40,
-        }
-        mock_data["industryAvg"] = 25
-        mock_data["recommendedRange"] = "22K - 35K"
-    elif any(
-        kw in pl for kw in ["数据分析", "数据", "算法", "ai", "人工智能", "机器学习"]
-    ):
-        mock_data["salaryRange"] = {"min": 20, "max": 55, "median": 30}
-        mock_data["percentiles"] = {
-            "p10": 16,
-            "p25": 22,
-            "p50": 30,
-            "p75": 40,
-            "p90": 50,
-        }
-        mock_data["industryAvg"] = 30
-        mock_data["recommendedRange"] = "28K - 42K"
-
-    city_map = {
-        "北京": 1.15,
-        "上海": 1.12,
-        "深圳": 1.12,
-        "广州": 1.05,
-        "杭州": 1.08,
-        "成都": 0.92,
-        "南京": 0.95,
-        "武汉": 0.90,
-        "西安": 0.88,
-        "长沙": 0.85,
-        "重庆": 0.85,
-        "苏州": 0.95,
-    }
-    ratio = city_map.get(city, 1.0)
-    if ratio != 1.0:
-        for key in ["salaryRange", "percentiles"]:
-            for k in mock_data[key]:
-                mock_data[key][k] = round(mock_data[key][k] * ratio)
-        mock_data["industryAvg"] = round(mock_data["industryAvg"] * ratio)
-        mock_data["cityAvg"] = round(25 * ratio)
-        for arr_key in ["experienceLevels", "educationImpact"]:
-            for item in mock_data[arr_key]:
-                item["salary"] = round(item["salary"] * ratio)
-        lo, hi = mock_data["recommendedRange"].replace("K", "").split(" - ")
-        mock_data["recommendedRange"] = (
-            f"{round(int(lo) * ratio)}K - {round(int(hi) * ratio)}K"
-        )
-
-    return mock_data
+    # Non-streaming: collect full result and return as JSON
+    async for result_text in _stream():
+        try:
+            return _json.loads(result_text)
+        except Exception:
+            return {"error": "解析薪资分析结果失败", "detail": result_text}
 
 
-# ===================== 批量筛选 =====================
+# ===================== 简历审查 =====================
+# ===================== 简历审查 =====================
 
 
 @app.post("/api/batch-screen")
 async def batch_screen(req: BatchScreenRequest):
-    await asyncio.sleep(2)
-    names_pool = [
-        ("张三", "Java", "Spring Boot, MySQL, Redis", 92, "strong"),
-        ("李四", "Java", "Spring Cloud, Kafka, Docker", 85, "strong"),
-        ("王五", "Python", "Django, PostgreSQL, Flask", 65, "moderate"),
-        ("赵六", "Java", "Spring, MyBatis, RabbitMQ", 78, "moderate"),
-        ("钱七", "Go", "Gin, gRPC, K8s, Docker", 88, "strong"),
-        ("孙八", "Java", "Spring Boot, MongoDB, ES", 72, "moderate"),
-        ("周九", "C++", "Qt, Boost, STL, Linux", 55, "weak"),
-        ("吴十", "Java", "Spring Cloud, Nacos, Sentinel", 82, "strong"),
-        ("郑十一", "前端", "React, TypeScript, Webpack", 45, "weak"),
-        ("冯十二", "Java", "Spring, Dubbo, Zookeeper", 90, "strong"),
-        ("陈十三", "Python", "FastAPI, SQLAlchemy, Celery", 68, "moderate"),
-        ("褚十四", "Java", "Spring Boot, JPA, Thymeleaf", 60, "moderate"),
-        ("卫十五", "Go", "Beego, MySQL, Redis, MQ", 75, "moderate"),
-        ("蒋十六", "Java", "Spring Cloud, Docker, K8s", 95, "strong"),
-        ("沈十七", "前端", "Vue, Pinia, Vite, Uniapp", 58, "weak"),
-        ("韩十八", "Java", "Spring, MyBatis-Plus, OSS", 70, "moderate"),
-        ("杨十九", "大数据", "Hadoop, Spark, Flink, Hive", 80, "strong"),
-        ("朱二十", "Java", "Spring Boot, Redis, MQ, ES", 76, "moderate"),
-    ]
-    count = min(req.resumeCount, len(names_pool))
-    selected = names_pool[:count]
-    results = []
-    for i, (name, tech, skills_str, score, rec) in enumerate(selected, 1):
-        passed = score >= req.threshold
-        results.append(
-            {
-                "id": f"batch_{i}",
-                "name": name,
-                "filename": f"{name}_简历.pdf",
-                "mainTech": tech,
-                "skills": skills_str,
-                "score": score,
-                "recommendation": rec,
-                "passed": passed,
-                "education": "本科",
-                "workYears": 3 + (i % 5),
-            }
-        )
-    passed_count = sum(1 for r in results if r["passed"])
-    return {
-        "total": len(results),
-        "threshold": req.threshold,
-        "passedCount": passed_count,
-        "failedCount": len(results) - passed_count,
-        "avgScore": round(sum(r["score"] for r in results) / len(results)),
-        "results": results,
-    }
+    """调用 Coze Bot 对上传的简历进行批量审查评分，SSE 流式返回。"""
+    resume_items = []
+    for rid in req.resumeIds:
+        rd = uploaded_resumes.get(rid)
+        if rd:
+            resume_items.append(rd.model_dump())
+        else:
+            resume_items.append({"id": rid, "filename": "unknown", "raw_text": ""})
+
+    return StreamingResponse(
+        batch_screening_generator(
+            jd_content=req.jdContent,
+            resume_items=resume_items,
+            threshold=req.threshold,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ===================== 简历初筛 =====================
@@ -380,25 +271,57 @@ async def run_screening(req: ScreeningRequest):
 @app.get("/api/resume/{resume_id}/file")
 async def get_resume_file(resume_id: str):
     """返回上传的简历原始文件供预览/下载。"""
-    rd = uploaded_resumes.get(resume_id)
-    if not rd:
-        raise HTTPException(status_code=404, detail="简历不存在")
-    if not rd.file_bytes:
-        raise HTTPException(status_code=404, detail="文件内容已过期")
-    filename = rd.filename or "resume.pdf"
-    media_type = "application/octet-stream"
-    if filename.lower().endswith(".pdf"):
-        media_type = "application/pdf"
-    elif filename.lower().endswith((".doc", ".docx")):
-        media_type = "application/msword"
-    return Response(
-        content=rd.file_bytes,
-        media_type=media_type,
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
+    try:
+        rd = uploaded_resumes.get(resume_id)
+        if not rd:
+            logger.warning("简历不存在: %s", resume_id)
+            raise HTTPException(status_code=404, detail="简历不存在")
+        if not rd.file_bytes:
+            logger.warning("简历文件内容已过期: %s", resume_id)
+            raise HTTPException(status_code=404, detail="文件内容已过期")
+        filename = rd.filename or "resume.pdf"
+        media_type = "application/octet-stream"
+        if filename.lower().endswith(".pdf"):
+            media_type = "application/pdf"
+        elif filename.lower().endswith((".doc", ".docx")):
+            media_type = "application/msword"
 
+        # RFC 5987: non-ASCII filenames use percent-encoding + UTF-8
+        ascii_name = filename.encode("ascii", "ignore").decode("ascii")
+        if not ascii_name.strip():
+            ext = os.path.splitext(filename)[1] or ".pdf"
+            ascii_name = "resume" + ext
+        elif ascii_name.strip() == (
+            "." + filename.rsplit(".", 1)[-1] if "." in filename else ""
+        ):
+            ext = os.path.splitext(filename)[1] or ".pdf"
+            ascii_name = "resume" + ext
+        from urllib.parse import quote
 
-# ===================== 面试题 =====================
+        utf8_name = quote(filename.encode("utf-8"))
+
+        logger.info(
+            "返回简历文件: %s, size=%d bytes, type=%s",
+            filename,
+            len(rd.file_bytes),
+            media_type,
+        )
+        return Response(
+            content=rd.file_bytes,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": "attachment; filename="
+                " + ascii_name + "
+                "; filename*=UTF-8''" + utf8_name,
+                "Content-Length": str(len(rd.file_bytes)),
+                "Accept-Ranges": "bytes",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("获取简历文件失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="获取文件失败: " + str(e))
 
 
 @app.post("/api/interview-questions/generate")

@@ -8,6 +8,20 @@ import {
 import { fetchCozeStatus, selectCozeBot } from '../services/api'
 import type { CozeStatus, CozeSpace } from '../services/api'
 
+const SPACE_ORDER: Record<string, number> = {
+  jd_generator: 1,
+  resume_screening: 2,
+  interview_questions: 3,
+  batch_screening: 4,
+  offer_email: 5,
+  salary_analysis: 6,
+  coze: 7,
+}
+
+function sortBySidebar(a: { space_id: string }, b: { space_id: string }) {
+  return (SPACE_ORDER[a.space_id] || 99) - (SPACE_ORDER[b.space_id] || 99)
+}
+
 export default function CozePage() {
   const [status, setStatus] = useState<CozeStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -126,7 +140,7 @@ export default function CozePage() {
 
           <Card title="Bot ID 状态" style={{ marginBottom: 16, fontSize: 14 }}>
             <Table
-              dataSource={status.spaces.map((s) => ({
+              dataSource={status.spaces.filter((s) => s.space_id !== 'mock_interview' && s.space_id !== 'data_dashboard').sort(sortBySidebar).map((s) => ({
                 key: s.space_id,
                 label: s.name || s.space_id,
                 space_id: s.space_id,
@@ -151,7 +165,7 @@ export default function CozePage() {
             />
           </Card>
 
-          {status.spaces.map((space: CozeSpace) => (
+          {status.spaces.filter((s) => s.space_id !== 'mock_interview' && s.space_id !== 'data_dashboard').sort(sortBySidebar).map((space: CozeSpace) => (
             <Card
               key={space.space_id}
               title={

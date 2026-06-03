@@ -30,6 +30,7 @@ const quickTemplates = [
   { label: '算法', value: '算法工程师' },
   { label: '测试开发', value: '测试开发工程师' },
   { label: '运维', value: '运维工程师' },
+  { label: 'UI/UX设计', value: 'UI/UX设计师' },
 ]
 
 export default function InterviewQuestionsPage() {

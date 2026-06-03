@@ -39,12 +39,17 @@ export async function streamJDGeneration(
       // Backend may send full accumulated text (Coze SSE events) or
       // incremental deltas (mock chars). Detect by checking if new text
       // starts with previous content (accumulated) or not (delta).
+      // Coze 可能发送增量 delta 或累积全文，用 startsWith 自动识别
       if (text.startsWith(fullText) && text.length > fullText.length) {
-        // Accumulated format: text contains the full response so far
+        // 累积模式：text 包含完整内容，取增量部分
         const delta = text.slice(fullText.length)
         if (delta) onChunk(delta)
         fullText = text
+      } else if (text === fullText) {
+        // 完全重复的内容，跳过（Coze 可能重复发送同一事件）
+        continue
       } else {
+        // 增量模式：text 是新追加的片段
         fullText += text
         onChunk(text)
       }
@@ -219,7 +224,7 @@ export async function analyzeSalary(params: {
   return res.json()
 }
 
-// ====== 批量筛选相关 API ======
+// ====== 简历审查相关 API ======
 
 export interface BatchScreenResult {
   total: number
@@ -238,21 +243,67 @@ export interface BatchScreenResult {
     passed: boolean
     education: string
     workYears: number
+    integrityIssues: string[]
+    integrityScore: number
+    timelineConsistent: boolean
   }[]
 }
 
-export async function batchScreen(params: {
-  jdContent: string
-  resumeCount?: number
-  threshold?: number
-}): Promise<BatchScreenResult> {
-  const res = await fetch('/api/batch-screen', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
+export async function streamBatchScreen(
+  files: File[],
+  jdContent: string,
+  threshold: number,
+  onProgress: (data: any) => void,
+  onDone: (data: BatchScreenResult) => void,
+  onError?: (err: Error) => void,
+) {
+  try {
+    // 1. Upload files
+    const formData = new FormData()
+    files.forEach((file) => formData.append('files', file))
+    const uploadRes = await fetch('/api/resume/upload', {
+      method: 'POST',
+      body: formData,
+    })
+    if (!uploadRes.ok) throw new Error(`上传失败 HTTP ${uploadRes.status}`)
+    const uploadData = await uploadRes.json()
+    const resumeIds: string[] = uploadData.resumes.map((r: any) => r.id)
+
+    // 2. SSE stream
+    const response = await fetch('/api/batch-screen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jdContent, resumeIds, threshold }),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    if (!reader) throw new Error('No reader available')
+
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data: ')) continue
+        try {
+          const data = JSON.parse(trimmed.slice(6))
+          if (data.status === 'completed') {
+            onDone(data as BatchScreenResult)
+          } else {
+            onProgress(data)
+          }
+        } catch { /* skip */ }
+      }
+    }
+  } catch (err) {
+    onError?.(err as Error)
+  }
 }
 
 // ====== 简历初筛（新） ======

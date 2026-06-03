@@ -51,6 +51,16 @@ export default function SalaryAnalysisPage() {
         experience,
         education,
       })
+      // Check for error response from backend
+      if (data && (data as any).error) {
+        message.error((data as any).error)
+        return
+      }
+      // Validate required fields before setting
+      if (!data?.percentiles || !data?.experienceLevels || !data?.educationImpact) {
+        message.error('返回数据格式异常，请重试')
+        return
+      }
       setResult(data)
     } catch (err: any) {
       message.error('分析失败：' + (err.message || '未知错误'))
@@ -59,7 +69,7 @@ export default function SalaryAnalysisPage() {
     }
   }
 
-  const maxPercentile = result ? result.percentiles.p90 : 100
+  const maxPercentile = result?.percentiles?.p90 || 100
 
   return (
     <div>
@@ -178,7 +188,7 @@ export default function SalaryAnalysisPage() {
                     <Card size="small" style={{ textAlign: 'center', background: '#f6ffed' }}>
                       <Statistic
                         title="建议薪资范围"
-                        value={result.recommendedRange}
+                        value={result.recommendedRange || "-"}
                         valueStyle={{ fontSize: 18, color: '#52c41a' }}
                       />
                     </Card>
@@ -187,7 +197,7 @@ export default function SalaryAnalysisPage() {
                     <Card size="small" style={{ textAlign: 'center', background: '#e6f7ff' }}>
                       <Statistic
                         title="市场中位数"
-                        value={result.percentiles.p50}
+                        value={result.percentiles?.p50 || 0}
                         suffix="K"
                         valueStyle={{ fontSize: 18, color: '#1677ff' }}
                       />
@@ -197,7 +207,7 @@ export default function SalaryAnalysisPage() {
                     <Card size="small" style={{ textAlign: 'center', background: '#fff7e6' }}>
                       <Statistic
                         title="数据可信度"
-                        value={result.confidence}
+                        value={result.confidence || "-"}
                         valueStyle={{ fontSize: 18, color: '#faad14' }}
                       />
                     </Card>
@@ -208,11 +218,11 @@ export default function SalaryAnalysisPage() {
                 <div>
                   <Divider orientation="left" style={{ fontSize: 14, fontWeight: 600 }}>薪资分布</Divider>
                   {[
-                    { label: 'P10（偏低）', value: result.percentiles.p10, color: '#91caff' },
-                    { label: 'P25（较低）', value: result.percentiles.p25, color: '#69b1ff' },
-                    { label: 'P50（中位）', value: result.percentiles.p50, color: '#1677ff' },
-                    { label: 'P75（较高）', value: result.percentiles.p75, color: '#fa8c16' },
-                    { label: 'P90（偏高）', value: result.percentiles.p90, color: '#ff4d4f' },
+                    { label: 'P10（偏低）', value: result.percentiles?.p10 || 0, color: '#91caff' },
+                    { label: 'P25（较低）', value: result.percentiles?.p25 || 0, color: '#69b1ff' },
+                    { label: 'P50（中位）', value: result.percentiles?.p50 || 0, color: '#1677ff' },
+                    { label: 'P75（较高）', value: result.percentiles?.p75 || 0, color: '#fa8c16' },
+                    { label: 'P90（偏高）', value: result.percentiles?.p90 || 0, color: '#ff4d4f' },
                   ].map((item) => (
                     <div key={item.label} style={{ marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -236,7 +246,7 @@ export default function SalaryAnalysisPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, color: '#666' }}>本岗位均值</span>
                         <span style={{ fontSize: 16, fontWeight: 600, color: '#1677ff' }}>
-                          {result.industryAvg}K
+                          {result.industryAvg || 0}K
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
@@ -246,17 +256,17 @@ export default function SalaryAnalysisPage() {
                       <Divider style={{ margin: '8px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13 }}>
-                          {result.industryAvg >= 21
+                          {(result.industryAvg || 0) >= 21
                             ? <><RiseOutlined style={{ color: '#52c41a' }} /> 高于行业</>
                             : <><FallOutlined style={{ color: '#ff4d4f' }} /> 低于行业</>}
                         </span>
                         <span style={{
                           fontSize: 14, fontWeight: 600,
-                          color: result.industryAvg >= 21 ? '#52c41a' : '#ff4d4f',
+                          color: (result.industryAvg || 0) >= 21 ? '#52c41a' : '#ff4d4f',
                         }}>
-                          {result.industryAvg >= 21
-                            ? `+${Math.round((result.industryAvg / 21 - 1) * 100)}%`
-                            : `${Math.round((1 - result.industryAvg / 21) * 100)}%`}
+                          {(result.industryAvg || 0) >= 21
+                            ? `+${Math.round(((result.industryAvg || 0) / 21 - 1) * 100)}%`
+                            : `${Math.round((1 - (result.industryAvg || 0) / 21) * 100)}%`}
                         </span>
                       </div>
                     </Card>
@@ -265,30 +275,30 @@ export default function SalaryAnalysisPage() {
                     <Card size="small" title="城市对比" styles={{ body: { padding: '12px 16px' } }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, color: '#666' }}>
-                          {result.city || '全国'}均值
+                          {result.city || "全国"}均值
                         </span>
                         <span style={{ fontSize: 16, fontWeight: 600, color: '#1677ff' }}>
-                          {result.cityAvg}K
+                          {result.cityAvg || 0}K
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                         <span style={{ fontSize: 13, color: '#666' }}>全国均值</span>
-                        <span style={{ fontSize: 16, fontWeight: 600 }}>{result.industryAvg}K</span>
+                        <span style={{ fontSize: 16, fontWeight: 600 }}>{result.industryAvg || 0}K</span>
                       </div>
                       <Divider style={{ margin: '8px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13 }}>
-                          {result.cityAvg >= result.industryAvg
+                          {(result.cityAvg || 0) >= (result.industryAvg || 0)
                             ? <><RiseOutlined style={{ color: '#52c41a' }} /> 高于全国</>
                             : <><FallOutlined style={{ color: '#ff4d4f' }} /> 低于全国</>}
                         </span>
                         <span style={{
                           fontSize: 14, fontWeight: 600,
-                          color: result.cityAvg >= result.industryAvg ? '#52c41a' : '#ff4d4f',
+                          color: (result.cityAvg || 0) >= (result.industryAvg || 0) ? '#52c41a' : '#ff4d4f',
                         }}>
-                          {result.cityAvg >= result.industryAvg
-                            ? `+${Math.round((result.cityAvg / result.industryAvg - 1) * 100)}%`
-                            : `${Math.round((1 - result.cityAvg / result.industryAvg) * 100)}%`}
+                          {(result.cityAvg || 0) >= (result.industryAvg || 0)
+                            ? `+${Math.round(((result.cityAvg || 0) / (result.industryAvg || 1) - 1) * 100)}%`
+                            : `${Math.round((1 - (result.cityAvg || 0) / (result.industryAvg || 1)) * 100)}%`}
                         </span>
                       </div>
                     </Card>
@@ -299,7 +309,7 @@ export default function SalaryAnalysisPage() {
                 <Row gutter={16}>
                   <Col span={12}>
                     <Card size="small" title="经验 vs 薪资" styles={{ body: { padding: '12px 16px' } }}>
-                      {result.experienceLevels.map((item) => (
+                      {(result.experienceLevels || []).map((item) => (
                         <div key={item.level} style={{ marginBottom: 6 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
                             <span>{item.level}</span>
@@ -317,7 +327,7 @@ export default function SalaryAnalysisPage() {
                   </Col>
                   <Col span={12}>
                     <Card size="small" title="学历 vs 薪资" styles={{ body: { padding: '12px 16px' } }}>
-                      {result.educationImpact.map((item) => (
+                      {(result.educationImpact || []).map((item) => (
                         <div key={item.level} style={{ marginBottom: 6 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
                             <span>{item.level}</span>

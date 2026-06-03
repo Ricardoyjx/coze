@@ -1,14 +1,16 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   Card, Upload, Button, Steps, Input, Row, Col, Progress, Tag, Space, Table, message,
-  Statistic, Slider, Segmented,
+  Statistic, Slider, Segmented, Tooltip,
 } from 'antd'
 import {
   UploadOutlined, FileTextOutlined, PlayCircleOutlined, CheckCircleOutlined,
   DownloadOutlined, FilterOutlined, TeamOutlined, RiseOutlined,
+  EyeOutlined, WarningOutlined, CheckCircleFilled, CloseCircleFilled,
 } from '@ant-design/icons'
-import { batchScreen } from '../services/api'
+import { streamBatchScreen } from '../services/api'
 import type { BatchScreenResult } from '../services/api'
+import MarioRunning from '../components/MarioRunning'
 
 const { TextArea } = Input
 const { Dragger } = Upload
@@ -20,8 +22,10 @@ export default function BatchScreeningPage() {
   const [threshold, setThreshold] = useState(60)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [statusText, setStatusText] = useState('')
   const [result, setResult] = useState<BatchScreenResult | null>(null)
   const [filterPass, setFilterPass] = useState<string>('all')
+  const abortRef = useRef(false)
 
   const handleUpload = (info: any) => {
     setFiles(info.fileList.map((f: any) => f.originFileObj))
@@ -37,44 +41,89 @@ export default function BatchScreeningPage() {
       return
     }
 
+    abortRef.current = false
     setProcessing(true)
     setStep(1)
     setProgress(0)
+    setResult(null)
 
-    // 模拟处理进度
-    for (let i = 0; i <= 100; i += 3) {
-      await new Promise((resolve) => setTimeout(resolve, 60))
-      setProgress(i)
-    }
-
-    try {
-      const data = await batchScreen({
-        jdContent: jdContent.trim(),
-        resumeCount: files.length,
-        threshold,
-      })
-      setResult(data)
-      setStep(2)
-      message.success(`筛选完成！通过 ${data.passedCount} 人`)
-    } catch (err: any) {
-      message.error('批量筛选失败：' + (err.message || '未知错误'))
-    } finally {
-      setProcessing(false)
-    }
+    streamBatchScreen(
+      files,
+      jdContent.trim(),
+      threshold,
+      (data) => {
+        if (abortRef.current) return
+        const pct = Math.round((data.processedResumes / data.totalResumes) * 100)
+        setProgress(pct)
+        setStatusText(`正在分析第 ${data.processedResumes}/${data.totalResumes} 份简历`)
+      },
+      (data) => {
+        if (abortRef.current) return
+        setProgress(100)
+        setResult(data)
+        setProcessing(false)
+        setStep(2)
+        message.success(`审查完成！通过 ${data.passedCount} 人`)
+      },
+      (err) => {
+        if (abortRef.current) return
+        message.error('简历审查失败：' + err.message)
+        setProcessing(false)
+      },
+    )
   }
 
   const filteredResults = useMemo(() => {
     if (!result) return []
     if (filterPass === 'pass') return result.results.filter((r) => r.passed)
     if (filterPass === 'fail') return result.results.filter((r) => !r.passed)
+    if (filterPass === 'integrity') return result.results.filter((r) => r.integrityIssues && r.integrityIssues.length > 0)
     return result.results
   }, [result, filterPass])
+
+  const handleViewFile = (resumeId: string) => {
+    const link = document.createElement('a')
+    link.href = `/api/resume/${resumeId}/file`
+    link.download = ''
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleExport = () => {
+    if (!result) return
+    const headers = ['排名', '姓名', '主技术栈', '技能', '工作年限', '学历', '匹配得分', '推荐等级', '通过', '可信度', '时间线一致', '异常项']
+    const rows = result.results.map((r, i) => [
+      i + 1,
+      r.name,
+      r.mainTech,
+      r.skills,
+      r.workYears,
+      r.education,
+      r.score,
+      r.recommendation === 'strong' ? '强烈推荐' : r.recommendation === 'weak' ? '不推荐' : '建议考虑',
+      r.passed ? '通过' : '未通过',
+      r.integrityScore || 100,
+      r.timelineConsistent ? '是' : '否',
+      (r.integrityIssues || []).join('; '),
+    ])
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${c}"`).join(',')).join('\n')
+    const bom = '\uFEFF'
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `简历审查报告_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('已导出CSV文件')
+  }
 
   const columns = [
     {
       title: '排名',
       key: 'rank',
-      width: 60,
+      width: 50,
       render: (_: any, __: any, i: number) => (
         <span style={{ fontWeight: 600, color: i < 3 ? '#1677ff' : '#999' }}>
           {i + 1}
@@ -106,39 +155,53 @@ export default function BatchScreeningPage() {
       title: '工作年限',
       dataIndex: 'workYears',
       key: 'workYears',
-      width: 80,
+      width: 70,
       sorter: (a: any, b: any) => a.workYears - b.workYears,
     },
     {
       title: '匹配得分',
       dataIndex: 'score',
       key: 'score',
-      width: 200,
+      width: 70,
       sorter: (a: any, b: any) => a.score - b.score,
       defaultSortOrder: 'descend' as const,
       render: (score: number) => (
-        <Space style={{ width: '100%' }}>
-          <Progress
-            percent={score}
-            size="small"
-            strokeColor={score >= 80 ? '#52c41a' : score >= 60 ? '#faad14' : '#ff4d4f'}
-            format={(p) => `${p}`}
-            style={{ width: 120, marginBottom: 0 }}
-          />
-          <span style={{
-            fontSize: 13, fontWeight: 600,
-            color: score >= 80 ? '#52c41a' : score >= 60 ? '#faad14' : '#ff4d4f',
-          }}>
-            {score}分
-          </span>
-        </Space>
+        <span style={{
+          fontSize: 13, fontWeight: 600,
+          color: score >= 80 ? '#52c41a' : score >= 60 ? '#faad14' : '#ff4d4f',
+        }}>
+          {score}分
+        </span>
       ),
     },
     {
-      title: '推荐等级',
+      title: '可信度',
+      dataIndex: 'integrityScore',
+      key: 'integrityScore',
+      width: 80,
+      sorter: (a: any, b: any) => (a.integrityScore || 100) - (b.integrityScore || 100),
+      render: (score: number, record: any) => {
+        const s = score || 100
+        const hasIssues = record.integrityIssues && record.integrityIssues.length > 0
+        return (
+          <Tooltip title={hasIssues ? record.integrityIssues.join('\n') : '未发现异常'}>
+            <span style={{
+              fontWeight: 600,
+              color: s >= 80 ? '#52c41a' : s >= 60 ? '#faad14' : '#ff4d4f',
+              cursor: hasIssues ? 'pointer' : 'default',
+            }}>
+              {hasIssues && <WarningOutlined style={{ marginRight: 2 }} />}
+              {s}分
+            </span>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '推荐',
       dataIndex: 'recommendation',
       key: 'recommendation',
-      width: 100,
+      width: 80,
       render: (rec: string) => {
         const map: Record<string, { color: string; text: string }> = {
           strong: { color: 'green', text: '强烈推荐' },
@@ -146,18 +209,38 @@ export default function BatchScreeningPage() {
           weak: { color: 'red', text: '不推荐' },
         }
         const item = map[rec] || map.moderate
-        return <Tag color={item.color}>{item.text}</Tag>
+        return <Tag color={item.color} style={{ fontSize: 11 }}>{item.text}</Tag>
+      },
+    },
+    {
+      title: '异常',
+      dataIndex: 'integrityIssues',
+      key: 'integrityIssues',
+      width: 60,
+      render: (issues: string[]) => {
+        if (!issues || issues.length === 0) {
+          return <CheckCircleFilled style={{ color: '#52c41a', fontSize: 16 }} />
+        }
+        return (
+          <Tooltip title={issues.join('\n')}>
+            <WarningOutlined style={{ color: '#faad14', fontSize: 16, cursor: 'pointer' }} />
+          </Tooltip>
+        )
       },
     },
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 80,
       render: (_: any, record: any) => (
-        <Space size="small">
-          <Button size="small" type="link">查看简历</Button>
-          {record.passed && <Button size="small" type="link" style={{ color: '#52c41a' }}>发Offer</Button>}
-        </Space>
+        <Button
+          size="small"
+          type="link"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewFile(record.id)}
+        >
+          查看
+        </Button>
       ),
     },
   ]
@@ -168,11 +251,13 @@ export default function BatchScreeningPage() {
     return '#ff4d4f'
   }
 
+  const integrityCount = result ? result.results.filter((r) => r.integrityIssues && r.integrityIssues.length > 0).length : 0
+
   return (
     <div>
       <div className="page-header">
-        <h2><FilterOutlined /> 批量筛选</h2>
-        <p>批量上传简历文件，AI自动解析、评分并排序，高效筛选候选人</p>
+        <h2><FilterOutlined /> 简历审查</h2>
+        <p>批量上传简历文件，AI自动解析、评分、核查真实性，高效筛选候选人</p>
       </div>
 
       <Steps
@@ -185,7 +270,6 @@ export default function BatchScreeningPage() {
         style={{ marginBottom: 24 }}
       />
 
-      {/* Step 0: 上传和配置 */}
       {step === 0 && (
         <Row gutter={24}>
           <Col xs={24} lg={14}>
@@ -205,7 +289,7 @@ export default function BatchScreeningPage() {
                   <FileTextOutlined style={{ fontSize: 48, color: '#1677ff' }} />
                 </p>
                 <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-                <p className="ant-upload-hint">支持 PDF、Word 格式，可批量上传，文件数量不限</p>
+                <p className="ant-upload-hint">支持 PDF、Word 格式，可批量上传</p>
               </Dragger>
             </Card>
           </Col>
@@ -241,8 +325,8 @@ export default function BatchScreeningPage() {
                     <RiseOutlined style={{ color: '#52c41a' }} />
                     <span style={{ fontSize: 13, color: '#333' }}>
                       {files.length > 0
-                        ? `已上传 ${files.length} 份简历，将通过分数线筛选`
-                        : '上传简历后即可开始批量筛选'}
+                        ? `已上传 ${files.length} 份简历`
+                        : '上传简历后即可开始审查'}
                     </span>
                   </Space>
                 </div>
@@ -267,33 +351,39 @@ export default function BatchScreeningPage() {
               onClick={handleStart}
               disabled={files.length === 0 || !jdContent.trim()}
             >
-              开始批量筛选（{files.length} 份简历）
+              开始简历审查（{files.length} 份简历）
             </Button>
           </Col>
         </Row>
       )}
 
-      {/* Step 1: 处理中 */}
       {step === 1 && (
         <Card style={{ textAlign: 'center', padding: '60px 0' }}>
-          <Progress
-            type="circle"
-            percent={progress}
-            size={160}
-            strokeColor="#1677ff"
-            format={(p) => `${p}%`}
-          />
-          <h3 style={{ marginTop: 24 }}>AI正在批量分析简历...</h3>
-          <p style={{ color: '#666' }}>
-            正在逐份解析简历内容并进行匹配度计算，共 {files.length} 份简历
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <MarioRunning />
+            <h3 style={{ margin: 0, fontSize: 18 }}>AI正在审查简历...</h3>
+            <p style={{ color: '#666', margin: 0 }}>
+              {statusText || `正在逐份分析简历内容并核查真实性，共 ${files.length} 份简历`}
+            </p>
+            <div style={{
+              width: 200, height: 6, background: '#f0f0f0',
+              borderRadius: 3, overflow: 'hidden', marginTop: 8,
+            }}>
+              <div style={{
+                width: `${progress}%`, height: '100%',
+                background: 'linear-gradient(90deg, #e53e30, #f5a623)',
+                borderRadius: 3, transition: 'width 0.4s ease',
+              }} />
+            </div>
+            <span style={{ color: '#999', fontSize: 13 }}>
+              {progress}% ({result?.results?.length || 0}/{files.length})
+            </span>
+          </div>
         </Card>
       )}
 
-      {/* Step 2: 结果展示 */}
       {step === 2 && result && (
         <>
-          {/* 统计卡片 */}
           <Row gutter={16} style={{ marginBottom: 24 }}>
             <Col xs={12} sm={6}>
               <Card>
@@ -302,51 +392,35 @@ export default function BatchScreeningPage() {
             </Col>
             <Col xs={12} sm={6}>
               <Card>
-                <Statistic
-                  title="通过"
-                  value={result.passedCount}
-                  valueStyle={{ color: '#52c41a' }}
-                  suffix={`/ ${result.total}`}
-                />
+                <Statistic title="通过" value={result.passedCount} valueStyle={{ color: '#52c41a' }} suffix={`/ ${result.total}`} />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic title="未通过" value={result.failedCount} valueStyle={{ color: '#ff4d4f' }} suffix={`/ ${result.total}`} />
               </Card>
             </Col>
             <Col xs={12} sm={6}>
               <Card>
                 <Statistic
-                  title="未通过"
-                  value={result.failedCount}
-                  valueStyle={{ color: '#ff4d4f' }}
-                  suffix={`/ ${result.total}`}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Card>
-                <Statistic
-                  title="平均分"
-                  value={result.avgScore}
-                  suffix="/ 100"
-                  prefix={<RiseOutlined />}
-                  valueStyle={{ color: scoreColor(result.avgScore) }}
+                  title="存疑简历"
+                  value={integrityCount}
+                  valueStyle={{ color: integrityCount > 0 ? '#faad14' : '#52c41a' }}
+                  prefix={integrityCount > 0 ? <WarningOutlined /> : <CheckCircleFilled />}
                 />
               </Card>
             </Col>
           </Row>
 
-          {/* 分数分布 */}
           <Card size="small" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>分数分布：</span>
               {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((rangeStart) => {
-                const rangeEnd = rangeStart + 10
-                const count = result.results.filter(
-                  (r) => r.score >= rangeStart && r.score < rangeEnd,
-                ).length
+                const count = result.results.filter((r) => r.score >= rangeStart && r.score < rangeStart + 10).length
                 const maxCount = Math.max(
                   ...Array.from({ length: 11 }, (_, i) =>
                     result.results.filter((r) => r.score >= i * 10 && r.score < i * 10 + 10).length,
-                  ),
-                  1,
+                  ), 1,
                 )
                 return (
                   <div key={rangeStart} style={{ textAlign: 'center', flex: 1, minWidth: 28 }}>
@@ -358,23 +432,15 @@ export default function BatchScreeningPage() {
                       opacity: count > 0 ? 1 : 0.2,
                       transition: 'height 0.3s',
                     }} />
-                    <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>
-                      {rangeStart}
-                    </div>
+                    <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>{rangeStart}</div>
                   </div>
                 )
               })}
             </div>
           </Card>
 
-          {/* 筛选 + 表格 */}
           <Card
-            title={
-              <Space>
-                <FilterOutlined />
-                筛选结果
-              </Space>
-            }
+            title={<Space><FilterOutlined /> 筛选结果</Space>}
             extra={
               <Space>
                 <Segmented
@@ -384,11 +450,10 @@ export default function BatchScreeningPage() {
                     { label: `全部 (${result.results.length})`, value: 'all' },
                     { label: `通过 (${result.passedCount})`, value: 'pass' },
                     { label: `未通过 (${result.failedCount})`, value: 'fail' },
+                    { label: `存疑 (${integrityCount})`, value: 'integrity' },
                   ]}
                 />
-                <Button icon={<DownloadOutlined />} onClick={() => message.success('已导出Excel')}>
-                  导出
-                </Button>
+                <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
               </Space>
             }
           >
@@ -403,9 +468,10 @@ export default function BatchScreeningPage() {
                 pageSizeOptions: ['10', '20', '50'],
               }}
               size="middle"
-              rowClassName={(record) => record.passed ? '' : 'row-weak'}
               onRow={(record) => ({
-                style: { background: record.passed ? undefined : '#fff8f8' },
+                style: {
+                  background: record.passed ? undefined : '#fff8f8',
+                },
               })}
             />
           </Card>
@@ -415,10 +481,10 @@ export default function BatchScreeningPage() {
               <Button onClick={() => {
                 setStep(0); setResult(null); setFiles([]); setJdContent(''); setProgress(0)
               }}>
-                重新筛选
+                重新审查
               </Button>
-              <Button type="primary" icon={<DownloadOutlined />} onClick={() => message.success('已导出Excel')}>
-                导出筛选报告
+              <Button type="primary" icon={<DownloadOutlined />} onClick={handleExport}>
+                导出审查报告
               </Button>
             </Space>
           </div>

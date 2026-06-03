@@ -297,6 +297,24 @@ export default function ResumeScreeningPage() {
                       <Tag key={i} color="red" style={{ marginBottom: 4, fontSize: 12, whiteSpace: 'normal', height: 'auto', padding: '2px 8px', lineHeight: '20px' }}>{p}</Tag>
                     ))}
                   </div>
+                  {/* 真实性核查结果 */}
+                  {result.integrityIssues && result.integrityIssues.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 13, marginBottom: 4, marginTop: 12, color: '#faad14', fontWeight: 600 }}>
+                        ⚠️ 真实性核查（可信度: {result.integrityScore || 100}分）
+                      </div>
+                      <div>
+                        {result.integrityIssues.map((issue: string, i: number) => (
+                          <Tag key={i} color="orange" style={{ marginBottom: 4, fontSize: 12, whiteSpace: 'normal', height: 'auto', padding: '2px 8px', lineHeight: '20px' }}>{issue}</Tag>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {result.timelineConsistent === false && (
+                    <div style={{ fontSize: 12, marginTop: 4, color: '#ff4d4f' }}>
+                      ⏰ 毕业年份与工作年限不匹配
+                    </div>
+                  )}
                 </Col>
                 <Col xs={24} sm={6}>
                   <p style={{ fontSize: 13, lineHeight: 1.8, margin: 0, wordBreak: 'break-word' }}>{result.summary}</p>

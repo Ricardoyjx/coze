@@ -16,6 +16,7 @@ const quickTemplates = [
   { label: '产品经理', data: { position: '产品经理（B端）', salary: '18-28K × 13薪' } },
   { label: '前端开发', data: { position: '前端开发工程师', salary: '15-25K × 14薪' } },
   { label: '数据分析', data: { position: '高级数据分析师', salary: '16-26K × 13薪' } },
+  { label: 'UI/UX设计', data: { position: 'UI/UX设计师', salary: '15-25K × 14薪' } },
 ]
 
 export default function OfferEmailPage() {

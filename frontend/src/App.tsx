@@ -20,8 +20,6 @@ import ResumeScreeningPage from './pages/ResumeScreeningPage'
 import InterviewQuestionsPage from './pages/InterviewQuestionsPage'
 import BatchScreeningPage from './pages/BatchScreeningPage'
 import OfferEmailPage from './pages/OfferEmailPage'
-import MockInterviewPage from './pages/MockInterviewPage'
-import DashboardPage from './pages/DashboardPage'
 import SalaryAnalysisPage from './pages/SalaryAnalysisPage'
 import CozePage from "./pages/CozePage"
 
@@ -46,22 +44,12 @@ const mainMenuItems = [
   {
     key: '/batch-screening',
     icon: <FilterOutlined />,
-    label: '批量筛选',
+    label: '简历审查',
   },
   {
     key: '/offer-email',
     icon: <MailOutlined />,
     label: 'Offer邮件',
-  },
-  {
-    key: '/mock-interview',
-    icon: <CustomerServiceOutlined />,
-    label: '模拟面试',
-  },
-  {
-    key: '/dashboard',
-    icon: <DashboardOutlined />,
-    label: '数据看板',
   },
   {
     key: '/salary',
@@ -161,8 +149,6 @@ function App() {
             <Route path="/interview-questions" element={<InterviewQuestionsPage />} />
             <Route path="/batch-screening" element={<BatchScreeningPage />} />
             <Route path="/offer-email" element={<OfferEmailPage />} />
-            <Route path="/mock-interview" element={<MockInterviewPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/salary" element={<SalaryAnalysisPage />} />
             <Route path="/coze" element={<CozePage />} />
           </Routes>

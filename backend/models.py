@@ -31,7 +31,7 @@ class SalaryAnalysisRequest(BaseModel):
 
 class BatchScreenRequest(BaseModel):
     jdContent: str
-    resumeCount: int = 10
+    resumeIds: list[str] = []
     threshold: int = 60
 
 
