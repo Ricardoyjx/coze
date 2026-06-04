@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables & sensitive files
+.env
+.env.*
+.langgraph_api/
